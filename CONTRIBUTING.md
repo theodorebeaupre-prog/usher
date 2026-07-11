@@ -10,6 +10,7 @@ type Adapter interface {
     Detect() (installed bool, version string)       // use the shared detect() helper
     Installed() bool                                // use the shared installed() helper — cheap, no version probe
     LaunchArgs(prompt string) []string              // argv for an interactive session
+    HeadlessArgs(prompt string) []string            // argv for print-and-exit mode; nil = unsupported
     QuotaError(exitCode int, output string) bool    // recognize the vendor's cap error
     Profile() Profile                               // strengths, quota window, install hint
 }

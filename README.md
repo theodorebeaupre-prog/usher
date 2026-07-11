@@ -6,7 +6,7 @@
 
 You already pay for Claude Code, Codex, Gemini CLI… **usher decides which one gets the job** — routing on task type, each agent's strengths, and who still has quota left. Built on the subscriptions you have. **No API keys.**
 
-[![status](https://img.shields.io/badge/status-v0.1-4c1)](#roadmap)
+[![status](https://img.shields.io/badge/status-v0.2-4c1)](#roadmap)
 [![license](https://img.shields.io/badge/license-MIT-8a8a8a)](LICENSE)
 [![made for](https://img.shields.io/badge/made_for-your_terminal-56b6c2)](#how-it-works)
 
@@ -42,7 +42,7 @@ $ go install github.com/theodorebeaupre-prog/usher@latest   # anywhere with Go
 
 Three things happen in the milliseconds before handoff — all local, no network call, works offline:
 
-1. **Detect** — finds which agent CLIs are installed (Claude Code, Codex, Gemini CLI, opencode).
+1. **Detect** — finds which agent CLIs are installed (Claude Code, Codex, Gemini CLI, opencode, GitHub Copilot CLI, Cursor).
 2. **Rank** — a transparent heuristic scores each agent: task-type classification (debug / feature / refactor / review / docs / test) × per-agent strength weights × a quota-confidence penalty × your pinned rules.
 3. **Exec** — replaces itself with the winner's interactive session. Full TTY, native experience, zero latency added where it counts.
 
@@ -75,6 +75,29 @@ $ usher "add dark mode to the settings pane"
 
 Hit a cap *mid-session*? When the agent exits, usher notices and offers the runner-up. Your prompt travels with you; the retyping ritual is dead.
 
+## Scripting & CI
+
+Headless mode: `-p` runs the winner's own print-and-exit mode — the answer
+lands on stdout, usher's routing chatter stays on stderr, and the agent's
+exit code is yours.
+
+```console
+$ usher -p "summarize the failing tests in one paragraph"
+→ claude  (test task · headless)          # stderr
+The three failures share one cause: …     # stdout — pipe it anywhere
+```
+
+And the part your nightly job will love: if the agent hits its usage cap,
+usher automatically fails over to the next-best one — each agent tried at
+most once, no human required.
+
+```console
+$ usher -p "fix the crash"
+→ claude  (debug task · headless)
+→ claude hit its cap — failing over to codex
+CODEX_RESULT …
+```
+
 ## Supported agents
 
 | Agent | Subscription it uses | Adapter |
@@ -83,6 +106,8 @@ Hit a cap *mid-session*? When the agent exits, usher notices and offers the runn
 | **Codex** | ChatGPT Plus / Pro | ✅ v0.1 |
 | **Gemini CLI** | Google AI Pro / free tier | ✅ v0.1 |
 | **opencode** | bring-your-own (incl. subscriptions) | ✅ v0.1 |
+| **GitHub Copilot CLI** | Copilot Free / Pro / Pro+ | ✅ v0.2 |
+| **Cursor CLI** | Cursor Hobby / Pro | ✅ v0.2 |
 | *yours?* | | [an adapter is one file](#contributing) |
 
 ## Design principles
@@ -97,7 +122,8 @@ Hit a cap *mid-session*? When the agent exits, usher notices and offers the runn
 - [x] Design spec — [read it](docs/superpowers/specs/2026-07-11-usher-design.md)
 - [x] Identity: wordmark + [animated terminal banner](assets/banner/) (engineering inspired by [GitHub Copilot CLI's banner](https://github.blog/engineering/from-pixels-to-characters-the-engineering-behind-github-copilot-clis-animated-ascii-banner/))
 - [x] v0.1 — adapters ×4, heuristic router, quota ledger, `doctor`, `--why`, Homebrew tap
-- [ ] v0.2 — headless mode for scripting/CI, more adapters
+- [x] v0.2 — headless mode (-p) with auto-failover, Copilot + Cursor adapters
+- [ ] v0.3 — --json envelope, --timeout guard, more adapters
 - [ ] Later — optional LLM-assisted routing, multi-account support
 
 ## Contributing
