@@ -22,6 +22,7 @@ var version = "dev"
 
 const usage = `usage:
   usher [flags] "<task>"     route the task to the best agent and launch it
+  usher -p "<task>"          headless: answer on stdout, exit code from the agent
   usher doctor               show detected agents, quota confidence, paths
   usher list                 list supported agents
   usher version              print version
@@ -30,6 +31,7 @@ flags:
   --agent <name>   skip routing, launch this agent
   --why            print the scoring table before launching
   --no-banner      skip the animated banner
+  -p, --print      headless: run the agent's print-and-exit mode (for scripts/CI)
 
 config: ` + "~" + `/.config/usher/config.toml   (pins, weights, default_agent, disabled)`
 
@@ -50,6 +52,9 @@ func run(args []string) error {
 	agentFlag := fs.String("agent", "", "launch this agent, skip routing")
 	whyFlag := fs.Bool("why", false, "print the scoring table")
 	noBanner := fs.Bool("no-banner", false, "skip the animated banner")
+	var headless bool
+	fs.BoolVar(&headless, "p", false, "headless: print the agent's answer and exit (no chat UI)")
+	fs.BoolVar(&headless, "print", false, "alias of -p")
 	fs.Usage = func() { fmt.Fprintln(os.Stderr, usage) }
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -68,7 +73,7 @@ func run(args []string) error {
 			return cmdDoctor()
 		}
 	}
-	if len(rest) == 0 && *agentFlag == "" {
+	if len(rest) == 0 && *agentFlag == "" && !headless {
 		banner.Play(os.Stdout, banner.ShouldAnimate(*noBanner))
 		fmt.Println()
 		fmt.Println(usage)
@@ -82,6 +87,12 @@ func run(args []string) error {
 	}
 
 	task := strings.Join(rest, " ")
+	if headless {
+		if task == "" {
+			return fmt.Errorf("headless mode needs a task: usher -p \"<task>\"")
+		}
+		return cmdHeadless(task, *agentFlag, *whyFlag)
+	}
 	return cmdLaunch(task, *agentFlag, *whyFlag)
 }
 
@@ -149,17 +160,118 @@ func cmdLaunch(task, forced string, why bool) error {
 	}
 	printDecision(choice, forced != "", routedAround)
 
-	led.RecordLaunch(choice.Name, now)
-	if err := led.Save(); err != nil {
-		fmt.Fprintln(os.Stderr, "usher: could not save ledger:", err)
-	}
-
 	return launchWithFallback(choice, ranked, task, dir, led)
 }
 
+// cmdHeadless routes and runs the winner's print-and-exit mode. usher's own
+// lines go to stderr; stdout belongs entirely to the agent. On a quota error
+// it fails over to the next ranked agent automatically — each agent is
+// attempted at most once. A forced --agent skips ranking and failover
+// entirely.
+func cmdHeadless(task, forced string, why bool) error {
+	now := time.Now()
+	cfg, err := config.Load(filepath.Join(config.Dir(), "config.toml"))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "usher: config error, using defaults:", err)
+		cfg = config.Config{}
+	}
+	led := ledger.Load(filepath.Join(config.Dir(), "ledger.json"))
+	if led.Warning != "" {
+		fmt.Fprintln(os.Stderr, "usher:", led.Warning)
+	}
+
+	dir, _ := os.Getwd()
+	var infos []router.AgentInfo
+	for _, info := range installedAgents(led, now) {
+		a, _ := adapters.Get(info.Name)
+		if a.HeadlessArgs(task) == nil {
+			continue // no print-and-exit mode; not a candidate for -p
+		}
+		infos = append(infos, info)
+	}
+	if len(infos) == 0 {
+		return noHeadlessAgentsError()
+	}
+	ranked := router.Rank(task, dir, infos, cfg)
+	if len(ranked) == 0 {
+		return fmt.Errorf("all headless-capable agents are disabled in config")
+	}
+
+	if forced != "" {
+		var pick *router.Scored
+		for i := range ranked {
+			if ranked[i].Name == forced {
+				pick = &ranked[i]
+				break
+			}
+		}
+		if pick == nil {
+			return fmt.Errorf("--agent %s: not installed, disabled, or no headless mode (try: usher doctor)", forced)
+		}
+		ranked = []router.Scored{*pick} // single attempt, no failover
+	}
+
+	if why {
+		printWhy(ranked, ranked[0].Name)
+	}
+
+	color := useColor()
+	exit := 0
+	for i, choice := range ranked {
+		a, _ := adapters.Get(choice.Name)
+		fmt.Fprintf(os.Stderr, "%s  %s\n",
+			sgr(color, 96, "→ "+choice.Name),
+			sgr(color, 90, fmt.Sprintf("(%s task · headless)", choice.TaskType)))
+
+		led.RecordLaunch(choice.Name, time.Now())
+		if err := led.Save(); err != nil {
+			fmt.Fprintln(os.Stderr, "usher: could not save ledger:", err)
+		}
+
+		var tail string
+		exit, tail, err = launch.Run(a.Bin(), a.HeadlessArgs(task), dir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "usher: %s failed to start: %v\n", choice.Name, err)
+			exit = 1
+			continue
+		}
+		if !a.QuotaError(exit, tail) {
+			os.Exit(exit)
+		}
+		led.RecordQuota(choice.Name, time.Now())
+		if err := led.Save(); err != nil {
+			fmt.Fprintln(os.Stderr, "usher: could not save ledger:", err)
+		}
+		if i < len(ranked)-1 {
+			fmt.Fprintf(os.Stderr, "%s\n", sgr(color, 93,
+				fmt.Sprintf("→ %s hit its cap — failing over to %s", choice.Name, ranked[i+1].Name)))
+		}
+	}
+	fmt.Fprintln(os.Stderr, "usher: every available agent is capped or failed — exiting with the last agent's code")
+	os.Exit(exit)
+	return nil
+}
+
+func noHeadlessAgentsError() error {
+	var sb strings.Builder
+	sb.WriteString("no installed agent supports headless mode. These would:\n")
+	for _, a := range adapters.All() {
+		if a.HeadlessArgs("x") != nil {
+			sb.WriteString(fmt.Sprintf("  %-10s %s\n", a.Name(), a.Profile().InstallHint))
+		}
+	}
+	return fmt.Errorf("%s", sb.String())
+}
+
 // launchWithFallback runs the chosen agent; on a quota error it records the
-// event and offers the runner-up.
+// event and offers the runner-up. Every attempt — including recursive
+// relaunches down the quota Y/n path and the start-failure path — records
+// its own launch event first.
 func launchWithFallback(choice router.Scored, ranked []router.Scored, task, dir string, led *ledger.Ledger) error {
+	led.RecordLaunch(choice.Name, time.Now())
+	if err := led.Save(); err != nil {
+		fmt.Fprintln(os.Stderr, "usher: could not save ledger:", err)
+	}
 	a, _ := adapters.Get(choice.Name)
 	exit, tail, err := launch.Run(a.Bin(), a.LaunchArgs(task), dir)
 	if err != nil {
@@ -307,6 +419,9 @@ func cmdDoctor() error {
 	led := ledger.Load(filepath.Join(config.Dir(), "ledger.json"))
 	color := useColor()
 	fmt.Println("usher doctor")
+	if led.Warning != "" {
+		fmt.Println("  ⚠ " + led.Warning)
+	}
 	for _, a := range adapters.All() {
 		ok, ver := a.Detect()
 		if !ok {
