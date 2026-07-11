@@ -1,8 +1,8 @@
-# whichai — Design Spec
+# usher — Design Spec
 
 **Date:** 2026-07-11
 **Status:** Approved for planning
-**Working name:** `whichai` (final name TBD before first public release; does not affect architecture)
+**Working name:** `usher` — the tool ushers your task to the right agent. Chosen 2026-07-11 after collision checks (GitHub, Homebrew, npm).
 
 ## Problem
 
@@ -13,10 +13,10 @@ Developers now pay for several AI coding agent subscriptions at once — Claude 
 A single cross-platform binary. You type:
 
 ```
-whichai "fix the flaky auth test"
+usher "fix the flaky auth test"
 ```
 
-It detects which agent CLIs are installed, scores the task against each agent's strengths and remaining-quota confidence, prints one explanatory line, and **execs into the winning agent's native interactive TUI** in the current directory with the prompt pre-seeded. No API keys — it uses the subscriptions you already pay for. The native experience of each agent is preserved entirely; whichai is a launcher, not a wrapper around output.
+It detects which agent CLIs are installed, scores the task against each agent's strengths and remaining-quota confidence, prints one explanatory line, and **execs into the winning agent's native interactive TUI** in the current directory with the prompt pre-seeded. No API keys — it uses the subscriptions you already pay for. The native experience of each agent is preserved entirely; usher is a launcher, not a wrapper around output.
 
 ### Goals
 
@@ -77,7 +77,7 @@ CLI behavior:
 
 ### 3. Usage ledger (`internal/ledger/`)
 
-Local JSON file at `~/.config/whichai/ledger.json` (no SQLite dependency; the data is tiny). Records:
+Local JSON file at `~/.config/usher/ledger.json` (no SQLite dependency; the data is tiny). Records:
 
 - Each launch: agent, timestamp.
 - Each observed quota event: agent, timestamp (reported by adapters after session exit).
@@ -94,14 +94,14 @@ Writes are atomic (temp file + rename) so concurrent sessions can't corrupt it.
 
 ### Supporting pieces
 
-- **Config** — TOML at `~/.config/whichai/config.toml`: weight overrides, pins, default agent, disabled agents.
-- **`whichai doctor`** — lists detected agents, versions, quota confidence, config path. First thing users run; also the debug tool for adapter issues.
-- **`whichai --version`, `whichai list`** — the usual hygiene.
+- **Config** — TOML at `~/.config/usher/config.toml`: weight overrides, pins, default agent, disabled agents.
+- **`usher doctor`** — lists detected agents, versions, quota confidence, config path. First thing users run; also the debug tool for adapter issues.
+- **`usher --version`, `usher list`** — the usual hygiene.
 
 ## Data flow
 
 ```
-whichai "task…"
+usher "task…"
   → registry.DetectAll()            (parallel, ~ms)
   → ledger.Load()
   → router.Rank(task, ctx, …)
