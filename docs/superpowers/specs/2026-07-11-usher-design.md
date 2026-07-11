@@ -130,6 +130,7 @@ usher "task…"
 ## Release checklist (v0.1)
 
 - README with demo GIF (same pipeline as AgentBar's), the "stop juggling your AI subscriptions" pitch up top, and an honest "how quota confidence works" section.
+- Animated startup banner ported to Go from the `assets/banner/` prototype (the pixel usher lights the wordmark, tagline "right this way."): plain-text frames + semantic color layer, 4-bit ANSI, batched runs; static fallback on non-TTY/`NO_COLOR`/`USHER_NO_BANNER`, never sent to screen readers.
 - Homebrew tap formula; goreleaser binaries for the three OSes.
 - MIT license, copyright ISO NORD CA.
 - `CONTRIBUTING.md` centered on "add an adapter in one file".
