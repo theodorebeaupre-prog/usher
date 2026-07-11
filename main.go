@@ -40,6 +40,11 @@ func main() {
 }
 
 func run(args []string) error {
+	if len(args) > 0 && (args[0] == "version" || args[0] == "--version") {
+		fmt.Println("usher", version)
+		return nil
+	}
+
 	fs := flag.NewFlagSet("usher", flag.ContinueOnError)
 	agentFlag := fs.String("agent", "", "launch this agent, skip routing")
 	whyFlag := fs.Bool("why", false, "print the scoring table")
@@ -52,9 +57,6 @@ func run(args []string) error {
 
 	if len(rest) > 0 {
 		switch rest[0] {
-		case "version", "--version":
-			fmt.Println("usher", version)
-			return nil
 		case "list":
 			return cmdList()
 		case "doctor":
@@ -68,21 +70,26 @@ func run(args []string) error {
 		return nil
 	}
 
+	for _, w := range rest {
+		if strings.HasPrefix(w, "-") {
+			return fmt.Errorf("flag %q must come before the task — usage: usher [flags] \"<task>\"", w)
+		}
+	}
+
 	task := strings.Join(rest, " ")
 	return cmdLaunch(task, *agentFlag, *whyFlag)
 }
 
-// installedAgents detects all adapters and returns the installed ones with
-// their ledger-derived quota confidence.
-func installedAgents(cfg config.Config, led *ledger.Ledger, now time.Time) ([]router.AgentInfo, []adapters.Adapter) {
+// installedAgents detects all adapters and returns router inputs for the
+// installed ones, with their ledger-derived quota confidence. Disabled
+// agents are filtered later by router.Rank.
+func installedAgents(led *ledger.Ledger, now time.Time) []router.AgentInfo {
 	var infos []router.AgentInfo
-	var installed []adapters.Adapter
 	for _, a := range adapters.All() {
 		ok, _ := a.Detect()
 		if !ok {
 			continue
 		}
-		installed = append(installed, a)
 		p := a.Profile()
 		infos = append(infos, router.AgentInfo{
 			Name:      a.Name(),
@@ -90,7 +97,7 @@ func installedAgents(cfg config.Config, led *ledger.Ledger, now time.Time) ([]ro
 			Quota:     led.Confidence(a.Name(), p.QuotaWindow, now),
 		})
 	}
-	return infos, installed
+	return infos
 }
 
 func cmdLaunch(task, forced string, why bool) error {
@@ -106,7 +113,7 @@ func cmdLaunch(task, forced string, why bool) error {
 	}
 
 	dir, _ := os.Getwd()
-	infos, _ := installedAgents(cfg, led, now)
+	infos := installedAgents(led, now)
 	if len(infos) == 0 {
 		return noAgentsError()
 	}
