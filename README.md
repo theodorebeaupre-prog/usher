@@ -6,13 +6,13 @@
 
 You already pay for Claude Code, Codex, Gemini CLI… **usher decides which one gets the job** — routing on task type, each agent's strengths, and who still has quota left. Built on the subscriptions you have. **No API keys.**
 
-[![status](https://img.shields.io/badge/status-v0.1_in_development-f0906c)](#roadmap)
+[![status](https://img.shields.io/badge/status-v0.1-4c1)](#roadmap)
 [![license](https://img.shields.io/badge/license-MIT-8a8a8a)](LICENSE)
 [![made for](https://img.shields.io/badge/made_for-your_terminal-56b6c2)](#how-it-works)
 
 </div>
 
-> 🚧 **Pre-release.** The design is finished and the Go implementation is underway — the terminal examples below are the approved design, not shipped software yet. Watch the repo to catch v0.1.
+> **v0.1.** Early but real — the examples below are live behavior. Found a rough edge? Issues welcome.
 
 ---
 
@@ -30,6 +30,13 @@ $ usher "fix the flaky auth test in photocull"
 ```
 
 …and you're inside a normal Claude Code session, in your repo, prompt already delivered. usher is a **launcher, not a wrapper** — it hands you the agent's real TUI and gets out of the way. Nothing sits between you and the tool you paid for.
+
+## Install
+
+```console
+$ brew install theodorebeaupre-prog/tap/usher   # macOS / Linux
+$ go install github.com/theodorebeaupre-prog/usher@latest   # anywhere with Go
+```
 
 ## How it works
 
@@ -72,10 +79,10 @@ Hit a cap *mid-session*? When the agent exits, usher notices and offers the runn
 
 | Agent | Subscription it uses | Adapter |
 |---|---|---|
-| **Claude Code** | Claude Pro / Max | 🚧 v0.1 |
-| **Codex** | ChatGPT Plus / Pro | 🚧 v0.1 |
-| **Gemini CLI** | Google AI Pro / free tier | 🚧 v0.1 |
-| **opencode** | bring-your-own (incl. subscriptions) | 🚧 v0.1 |
+| **Claude Code** | Claude Pro / Max | ✅ v0.1 |
+| **Codex** | ChatGPT Plus / Pro | ✅ v0.1 |
+| **Gemini CLI** | Google AI Pro / free tier | ✅ v0.1 |
+| **opencode** | bring-your-own (incl. subscriptions) | ✅ v0.1 |
 | *yours?* | | [an adapter is one file](#contributing) |
 
 ## Design principles
@@ -89,7 +96,7 @@ Hit a cap *mid-session*? When the agent exits, usher notices and offers the runn
 
 - [x] Design spec — [read it](docs/superpowers/specs/2026-07-11-usher-design.md)
 - [x] Identity: wordmark + [animated terminal banner](assets/banner/) (engineering inspired by [GitHub Copilot CLI's banner](https://github.blog/engineering/from-pixels-to-characters-the-engineering-behind-github-copilot-clis-animated-ascii-banner/))
-- [ ] v0.1 — adapters ×4, heuristic router, quota ledger, `doctor`, `--why`, Homebrew tap
+- [x] v0.1 — adapters ×4, heuristic router, quota ledger, `doctor`, `--why`, Homebrew tap
 - [ ] v0.2 — headless mode for scripting/CI, more adapters
 - [ ] Later — optional LLM-assisted routing, multi-account support
 

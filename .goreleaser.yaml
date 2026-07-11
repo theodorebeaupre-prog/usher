@@ -1,0 +1,21 @@
+version: 2
+project_name: usher
+builds:
+  - env: [CGO_ENABLED=0]
+    goos: [darwin, linux, windows]
+    goarch: [amd64, arm64]
+    ldflags: ["-s -w -X main.version={{.Version}}"]
+archives:
+  - formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+homebrew_casks:
+  - repository:
+      owner: theodorebeaupre-prog
+      name: homebrew-tap
+    homepage: https://github.com/theodorebeaupre-prog/usher
+    description: "One command. The right AI coding agent. Every time."
+    skip_upload: auto
+changelog:
+  sort: asc
