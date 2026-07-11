@@ -4,7 +4,7 @@ import "testing"
 
 func TestRegistryOrderAndLookup(t *testing.T) {
 	all := All()
-	want := []string{"claude"}
+	want := []string{"claude", "codex", "gemini", "opencode"}
 	if len(all) != len(want) {
 		t.Fatalf("want %d adapters, got %d", len(want), len(all))
 	}
@@ -61,5 +61,44 @@ func TestClaudeLaunchArgs(t *testing.T) {
 	}
 	if got := a.LaunchArgs(""); len(got) != 0 {
 		t.Errorf("empty prompt should mean no args, got %v", got)
+	}
+}
+
+func TestLaunchArgsPerAgent(t *testing.T) {
+	cases := []struct {
+		agent string
+		want  []string
+	}{
+		{"codex", []string{"fix it"}},
+		{"gemini", []string{"-i", "fix it"}},
+		{"opencode", []string{"--prompt", "fix it"}},
+	}
+	for _, c := range cases {
+		a, _ := Get(c.agent)
+		got := a.LaunchArgs("fix it")
+		if len(got) != len(c.want) {
+			t.Errorf("%s: LaunchArgs = %v, want %v", c.agent, got, c.want)
+			continue
+		}
+		for i := range got {
+			if got[i] != c.want[i] {
+				t.Errorf("%s: LaunchArgs[%d] = %q, want %q", c.agent, i, got[i], c.want[i])
+			}
+		}
+	}
+}
+
+func TestEveryAdapterHasCompleteProfile(t *testing.T) {
+	types := []string{"debug", "review", "refactor", "test", "docs", "feature", "other"}
+	for _, a := range All() {
+		p := a.Profile()
+		if p.QuotaWindow <= 0 || p.InstallHint == "" {
+			t.Errorf("%s: incomplete profile %+v", a.Name(), p)
+		}
+		for _, tt := range types {
+			if v, ok := p.Strengths[tt]; !ok || v <= 0 || v > 1 {
+				t.Errorf("%s: bad strength for %s: %v (ok=%v)", a.Name(), tt, v, ok)
+			}
+		}
 	}
 }

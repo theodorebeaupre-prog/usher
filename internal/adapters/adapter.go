@@ -32,7 +32,7 @@ type Adapter interface {
 
 // All returns every adapter in stable display order.
 func All() []Adapter {
-	return []Adapter{claudeAdapter{}}
+	return []Adapter{claudeAdapter{}, codexAdapter{}, geminiAdapter{}, opencodeAdapter{}}
 }
 
 func Get(name string) (Adapter, bool) {
