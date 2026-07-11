@@ -29,6 +29,9 @@ type Adapter interface {
 	// version — cheap enough for the launch path.
 	Installed() bool
 	LaunchArgs(prompt string) []string
+	// HeadlessArgs is the argv for the agent's print-and-exit mode
+	// (usher -p). nil means headless is unsupported or the prompt is empty.
+	HeadlessArgs(prompt string) []string
 	QuotaError(exitCode int, output string) bool
 	Profile() Profile
 }

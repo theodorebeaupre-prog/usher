@@ -122,3 +122,34 @@ func TestEveryAdapterHasCompleteProfile(t *testing.T) {
 		}
 	}
 }
+
+func TestHeadlessArgsPerAgent(t *testing.T) {
+	cases := []struct {
+		agent string
+		want  []string
+	}{
+		{"claude", []string{"-p", "fix it"}},
+		{"codex", []string{"exec", "fix it"}},
+		{"gemini", []string{"-p", "fix it"}},
+		{"opencode", []string{"run", "fix it"}},
+	}
+	for _, c := range cases {
+		a, ok := Get(c.agent)
+		if !ok {
+			t.Fatalf("adapter %s not found", c.agent)
+		}
+		got := a.HeadlessArgs("fix it")
+		if len(got) != len(c.want) {
+			t.Errorf("%s: HeadlessArgs = %v, want %v", c.agent, got, c.want)
+			continue
+		}
+		for i := range got {
+			if got[i] != c.want[i] {
+				t.Errorf("%s: HeadlessArgs[%d] = %q, want %q", c.agent, i, got[i], c.want[i])
+			}
+		}
+		if a.HeadlessArgs("") != nil {
+			t.Errorf("%s: empty prompt must return nil", c.agent)
+		}
+	}
+}

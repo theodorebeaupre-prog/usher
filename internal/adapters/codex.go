@@ -16,6 +16,13 @@ func (codexAdapter) LaunchArgs(prompt string) []string {
 	return []string{prompt}
 }
 
+func (codexAdapter) HeadlessArgs(prompt string) []string {
+	if prompt == "" {
+		return nil
+	}
+	return []string{"exec", prompt}
+}
+
 var codexQuotaPatterns = []string{
 	"usage limit",
 	"rate limit",

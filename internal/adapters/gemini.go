@@ -16,6 +16,13 @@ func (geminiAdapter) LaunchArgs(prompt string) []string {
 	return []string{"-i", prompt}
 }
 
+func (geminiAdapter) HeadlessArgs(prompt string) []string {
+	if prompt == "" {
+		return nil
+	}
+	return []string{"-p", prompt}
+}
+
 var geminiQuotaPatterns = []string{
 	"resource_exhausted",
 	"quota",

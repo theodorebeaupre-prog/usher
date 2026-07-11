@@ -16,6 +16,13 @@ func (opencodeAdapter) LaunchArgs(prompt string) []string {
 	return []string{"--prompt", prompt}
 }
 
+func (opencodeAdapter) HeadlessArgs(prompt string) []string {
+	if prompt == "" {
+		return nil
+	}
+	return []string{"run", prompt}
+}
+
 var opencodeQuotaPatterns = []string{
 	"rate limit",
 	"quota",

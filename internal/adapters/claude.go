@@ -17,6 +17,13 @@ func (claudeAdapter) LaunchArgs(prompt string) []string {
 	return []string{prompt}
 }
 
+func (claudeAdapter) HeadlessArgs(prompt string) []string {
+	if prompt == "" {
+		return nil
+	}
+	return []string{"-p", prompt}
+}
+
 // Patterns observed from Claude Code rate-limit failures.
 var claudeQuotaPatterns = []string{
 	"usage limit reached",
