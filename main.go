@@ -177,7 +177,9 @@ func launchWithFallback(choice router.Scored, ranked []router.Scored, task, dir 
 			fmt.Fprintln(os.Stderr, "usher: could not save ledger:", err)
 		}
 		if next, ok := runnerUp(ranked, choice.Name); ok && isTTY() {
-			fmt.Fprintf(os.Stderr, "\n\x1b[93m→ %s hit its usage cap — relaunch with %s? [Y/n] \x1b[0m", choice.Name, next.Name)
+			color := useColor()
+			prompt := sgr(color, 93, fmt.Sprintf("→ %s hit its usage cap — relaunch with %s? [Y/n] ", choice.Name, next.Name))
+			fmt.Fprintf(os.Stderr, "\n%s", prompt)
 			r := bufio.NewReader(os.Stdin)
 			line, _ := r.ReadString('\n')
 			ans := strings.ToLower(strings.TrimSpace(line))
