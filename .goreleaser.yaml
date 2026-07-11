@@ -23,6 +23,9 @@ homebrew_casks:
           if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
             system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/usher"]
           end
-    skip_upload: auto
+    # Flip to "auto" once the HOMEBREW_TAP_GITHUB_TOKEN repo secret exists
+    # (PAT with repo scope on theodorebeaupre-prog/homebrew-tap) — without it
+    # the cask push fails and takes the whole release down with it.
+    skip_upload: true
 changelog:
   sort: asc
