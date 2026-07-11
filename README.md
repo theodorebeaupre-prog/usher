@@ -12,7 +12,7 @@ You already pay for Claude Code, Codex, Gemini CLI… **usher decides which one 
 
 </div>
 
-> **v0.1.** Early but real — the examples below are live behavior. Found a rough edge? Issues welcome.
+> **v0.2.** Early but real — the examples below are live behavior. Found a rough edge? Issues welcome.
 
 ---
 
@@ -95,8 +95,10 @@ most once, no human required.
 $ usher -p "fix the crash"
 → claude  (debug task · headless)
 → claude hit its cap — failing over to codex
-CODEX_RESULT …
+Patched the nil-check in auth.go; tests pass.
 ```
+
+One caveat for piped stdin: the first agent consumes it — a failover agent starts with an empty stdin.
 
 ## Supported agents
 

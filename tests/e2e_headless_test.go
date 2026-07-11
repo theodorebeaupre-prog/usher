@@ -97,6 +97,40 @@ if [ "$1" = "exec" ]; then echo "CODEX_RESULT: $2"; exit 0; fi`)
 	}
 }
 
+func TestHeadlessSuccessWithQuotaWordNoFailover(t *testing.T) {
+	bin := buildUsher(t)
+	fakeDir, cfgHome := t.TempDir(), t.TempDir()
+	fakeAgent(t, fakeDir, "claude", `
+if [ "$1" = "--version" ]; then echo "1.0.0 (fake)"; exit 0; fi
+echo "note: discussing rate limit strategies" >&2
+echo "ANSWER: use a token bucket"; exit 0`)
+	fakeAgent(t, fakeDir, "codex", `
+if [ "$1" = "--version" ]; then echo "1.0.0 (fake)"; exit 0; fi
+if [ "$1" = "exec" ]; then echo "CODEX_SHOULD_NOT_RUN"; exit 0; fi`)
+
+	stdout, stderr, exit := runSplit(t, bin, fakeDir, cfgHome, "-p", "fix the crash")
+	if exit != 0 {
+		t.Fatalf("exit = %d\nstderr: %s", exit, stderr)
+	}
+	if strings.Contains(stdout, "CODEX_SHOULD_NOT_RUN") || strings.Contains(stderr, "failing over") {
+		t.Errorf("exit-0 run must never fail over:\nstdout: %s\nstderr: %s", stdout, stderr)
+	}
+	if !strings.Contains(stdout, "ANSWER: use a token bucket") {
+		t.Errorf("agent answer missing:\n%s", stdout)
+	}
+}
+
+func TestHeadlessNoAgentsError(t *testing.T) {
+	bin := buildUsher(t)
+	_, stderr, exit := runSplit(t, bin, t.TempDir(), t.TempDir(), "-p", "fix the crash")
+	if exit == 0 {
+		t.Error("want non-zero exit with no agents installed")
+	}
+	if !strings.Contains(stderr, "headless") {
+		t.Errorf("expected headless-agents error on stderr:\n%s", stderr)
+	}
+}
+
 func TestHeadlessNonQuotaExitPropagates(t *testing.T) {
 	bin := buildUsher(t)
 	fakeDir, cfgHome := t.TempDir(), t.TempDir()

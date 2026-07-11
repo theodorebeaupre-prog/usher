@@ -235,7 +235,7 @@ func cmdHeadless(task, forced string, why bool) error {
 			exit = 1
 			continue
 		}
-		if !a.QuotaError(exit, tail) {
+		if exit == 0 || !a.QuotaError(exit, tail) {
 			os.Exit(exit)
 		}
 		led.RecordQuota(choice.Name, time.Now())
