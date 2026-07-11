@@ -20,3 +20,4 @@ jobs:
           # Homebrew tap push needs a PAT with repo scope on homebrew-tap:
           # set HOMEBREW_TAP_GITHUB_TOKEN in repo secrets, or formula upload
           # is skipped (skip_upload: auto).
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}

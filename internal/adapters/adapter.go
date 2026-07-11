@@ -25,6 +25,9 @@ type Adapter interface {
 	Name() string
 	Bin() string
 	Detect() (installed bool, version string)
+	// Installed reports whether the CLI is on PATH without probing its
+	// version — cheap enough for the launch path.
+	Installed() bool
 	LaunchArgs(prompt string) []string
 	QuotaError(exitCode int, output string) bool
 	Profile() Profile
@@ -50,6 +53,13 @@ func detect(bin string) (bool, string) {
 		return false, ""
 	}
 	return true, versionCmd(bin)
+}
+
+// installed is the shared Installed implementation: a lookPath-only check,
+// with no version probe, for use on the launch path.
+func installed(bin string) bool {
+	_, err := lookPath(bin)
+	return err == nil
 }
 
 func realVersionCmd(bin string) string {

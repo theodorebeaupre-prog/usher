@@ -34,7 +34,7 @@ $ usher "fix the flaky auth test in photocull"
 ## Install
 
 ```console
-$ brew install theodorebeaupre-prog/tap/usher   # macOS / Linux
+$ brew install theodorebeaupre-prog/tap/usher   # macOS (Homebrew)
 $ go install github.com/theodorebeaupre-prog/usher@latest   # anywhere with Go
 ```
 
@@ -70,7 +70,7 @@ It's a confidence signal, not accounting — documented honestly as exactly that
 
 ```console
 $ usher "add dark mode to the settings pane"
-→ codex hit its usage cap 12 minutes ago — routing to claude (#2)
+→ claude  (feature task · codex is capped — routed around it · override with --agent)
 ```
 
 Hit a cap *mid-session*? When the agent exits, usher notices and offers the runner-up. Your prompt travels with you; the retyping ritual is dead.

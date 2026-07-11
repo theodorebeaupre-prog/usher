@@ -24,7 +24,7 @@ func TestStaticPrintsFinalFrame(t *testing.T) {
 
 func TestBatchedANSIRuns(t *testing.T) {
 	// Two adjacent cells with the same role must share one SGR sequence.
-	line := renderLine("██", map[int]string{0: "letter_lit", 1: "letter_lit"})
+	line := renderLine("██", map[int]string{0: "letter_lit", 1: "letter_lit"}, true)
 	if strings.Count(line, "\x1b[37m") != 1 {
 		t.Errorf("want exactly one SGR for a same-color run, got %q", line)
 	}
@@ -34,5 +34,16 @@ func TestShouldAnimateGates(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	if ShouldAnimate(false) {
 		t.Error("NO_COLOR must disable animation")
+	}
+}
+
+func TestNoColorSuppressesEscapes(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	var sb strings.Builder
+	if err := Play(&sb, false); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(sb.String(), "\x1b[") {
+		t.Errorf("NO_COLOR must suppress all escape sequences, got %q", sb.String())
 	}
 }

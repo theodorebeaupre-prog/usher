@@ -8,6 +8,7 @@ func (claudeAdapter) Name() string { return "claude" }
 func (claudeAdapter) Bin() string  { return "claude" }
 
 func (claudeAdapter) Detect() (bool, string) { return detect("claude") }
+func (claudeAdapter) Installed() bool        { return installed("claude") }
 
 func (claudeAdapter) LaunchArgs(prompt string) []string {
 	if prompt == "" {

@@ -7,6 +7,7 @@ type codexAdapter struct{}
 func (codexAdapter) Name() string           { return "codex" }
 func (codexAdapter) Bin() string            { return "codex" }
 func (codexAdapter) Detect() (bool, string) { return detect("codex") }
+func (codexAdapter) Installed() bool        { return installed("codex") }
 
 func (codexAdapter) LaunchArgs(prompt string) []string {
 	if prompt == "" {

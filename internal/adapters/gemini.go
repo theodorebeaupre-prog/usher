@@ -7,6 +7,7 @@ type geminiAdapter struct{}
 func (geminiAdapter) Name() string           { return "gemini" }
 func (geminiAdapter) Bin() string            { return "gemini" }
 func (geminiAdapter) Detect() (bool, string) { return detect("gemini") }
+func (geminiAdapter) Installed() bool        { return installed("gemini") }
 
 func (geminiAdapter) LaunchArgs(prompt string) []string {
 	if prompt == "" {

@@ -14,8 +14,15 @@ homebrew_casks:
   - repository:
       owner: theodorebeaupre-prog
       name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     homepage: https://github.com/theodorebeaupre-prog/usher
     description: "One command. The right AI coding agent. Every time."
+    hooks:
+      post:
+        install: |
+          if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/usher"]
+          end
     skip_upload: auto
 changelog:
   sort: asc

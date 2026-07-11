@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -23,7 +24,7 @@ const usage = `usage:
   usher [flags] "<task>"     route the task to the best agent and launch it
   usher doctor               show detected agents, quota confidence, paths
   usher list                 list supported agents
-  usher version               print version
+  usher version              print version
 
 flags:
   --agent <name>   skip routing, launch this agent
@@ -51,6 +52,10 @@ func run(args []string) error {
 	noBanner := fs.Bool("no-banner", false, "skip the animated banner")
 	fs.Usage = func() { fmt.Fprintln(os.Stderr, usage) }
 	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			// fs.Usage already printed the usage text.
+			return nil
+		}
 		return err
 	}
 	rest := fs.Args()
@@ -86,8 +91,7 @@ func run(args []string) error {
 func installedAgents(led *ledger.Ledger, now time.Time) []router.AgentInfo {
 	var infos []router.AgentInfo
 	for _, a := range adapters.All() {
-		ok, _ := a.Detect()
-		if !ok {
+		if !a.Installed() {
 			continue
 		}
 		p := a.Profile()
@@ -139,7 +143,11 @@ func cmdLaunch(task, forced string, why bool) error {
 	if why {
 		printWhy(ranked, choice.Name)
 	}
-	printDecision(choice, forced != "")
+	routedAround := ""
+	if forced == "" && !choice.Pinned {
+		routedAround = strongestCappedLoser(ranked, choice)
+	}
+	printDecision(choice, forced != "", routedAround)
 
 	led.RecordLaunch(choice.Name, now)
 	if err := led.Save(); err != nil {
@@ -206,23 +214,60 @@ func isTTY() bool {
 	return err == nil && fi.Mode()&os.ModeCharDevice != 0
 }
 
-func printDecision(c router.Scored, forced bool) {
+// useColor reports whether ANSI escapes should be emitted, per no-color.org:
+// any non-empty NO_COLOR disables color.
+func useColor() bool { return os.Getenv("NO_COLOR") == "" }
+
+// sgr wraps s in the given SGR code when color is true; otherwise it returns
+// s unchanged.
+func sgr(color bool, code int, s string) string {
+	if !color {
+		return s
+	}
+	return fmt.Sprintf("\x1b[%dm%s\x1b[0m", code, s)
+}
+
+// strongestCappedLoser finds the highest-strength ranked agent (other than
+// choice) that is stronger than choice but capped (Quota < 1.0) — the agent
+// usher routed around by picking choice instead. Returns "" if none.
+func strongestCappedLoser(ranked []router.Scored, choice router.Scored) string {
+	best := ""
+	bestStrength := choice.Strength
+	for _, r := range ranked {
+		if r.Name == choice.Name {
+			continue
+		}
+		if r.Strength > choice.Strength && r.Quota < 1.0 && r.Strength > bestStrength {
+			best = r.Name
+			bestStrength = r.Strength
+		}
+	}
+	return best
+}
+
+func printDecision(c router.Scored, forced bool, routedAround string) {
 	reason := c.TaskType + " task"
 	switch {
 	case forced:
 		reason = "your call"
 	case c.Pinned:
 		reason = "pinned"
+	case routedAround != "":
+		reason = fmt.Sprintf("%s task · %s is capped — routed around it", c.TaskType, routedAround)
 	case c.Quota < 1.0:
-		reason += " · routing around a cap"
+		reason += " · cap cooling down"
 	default:
 		reason += " · quota OK"
 	}
-	fmt.Fprintf(os.Stderr, "\x1b[96m→ %s\x1b[0m  \x1b[90m(%s · override with --agent)\x1b[0m\n", c.Name, reason)
+	color := useColor()
+	arrow := sgr(color, 96, "→ "+c.Name)
+	meta := sgr(color, 90, fmt.Sprintf("(%s · override with --agent)", reason))
+	fmt.Fprintf(os.Stderr, "%s  %s\n", arrow, meta)
 }
 
 func printWhy(ranked []router.Scored, winner string) {
-	fmt.Fprintf(os.Stderr, "task type: \x1b[97m%s\x1b[0m\n\n", ranked[0].TaskType)
+	color := useColor()
+	fmt.Fprintf(os.Stderr, "task type: %s\n\n", sgr(color, 97, ranked[0].TaskType))
 	fmt.Fprintf(os.Stderr, "  %-10s %9s %7s %6s %7s\n", "agent", "strength", "quota", "pin", "score")
 	for _, r := range ranked {
 		pin := "—"
@@ -258,28 +303,33 @@ func cmdList() error {
 func cmdDoctor() error {
 	now := time.Now()
 	led := ledger.Load(filepath.Join(config.Dir(), "ledger.json"))
+	color := useColor()
 	fmt.Println("usher doctor")
 	for _, a := range adapters.All() {
 		ok, ver := a.Detect()
 		if !ok {
-			fmt.Printf("  \x1b[90m%-10s not installed → %s\x1b[0m\n", a.Name(), a.Profile().InstallHint)
+			fmt.Printf("  %s\n", sgr(color, 90, fmt.Sprintf("%-10s not installed → %s", a.Name(), a.Profile().InstallHint)))
 			continue
 		}
 		conf := led.Confidence(a.Name(), a.Profile().QuotaWindow, now)
-		fmt.Printf("  \x1b[97m%-10s\x1b[0m %-14s quota %s %3.0f%%\n", a.Name(), ver, bar(conf), conf*100)
+		fmt.Printf("  %s %-14s quota %s %3.0f%%\n", sgr(color, 97, fmt.Sprintf("%-10s", a.Name())), ver, bar(conf, color), conf*100)
 	}
 	cfgPath := filepath.Join(config.Dir(), "config.toml")
 	if _, err := os.Stat(cfgPath); err != nil {
-		fmt.Printf("  config: %s \x1b[90m(not found — using defaults)\x1b[0m\n", cfgPath)
+		fmt.Printf("  config: %s %s\n", cfgPath, sgr(color, 90, "(not found — using defaults)"))
 	} else {
 		fmt.Printf("  config: %s\n", cfgPath)
 	}
-	fmt.Printf("  ledger: %s \x1b[90m(%d events, confidence not accounting)\x1b[0m\n",
-		filepath.Join(config.Dir(), "ledger.json"), len(led.Events))
+	fmt.Printf("  ledger: %s %s\n",
+		filepath.Join(config.Dir(), "ledger.json"),
+		sgr(color, 90, fmt.Sprintf("(%d events, confidence not accounting)", len(led.Events))))
 	return nil
 }
 
-func bar(v float64) string {
+func bar(v float64, color bool) string {
 	full := int(v * 10)
+	if !color {
+		return strings.Repeat("█", full) + strings.Repeat("░", 10-full)
+	}
 	return "\x1b[92m" + strings.Repeat("█", full) + "\x1b[90m" + strings.Repeat("░", 10-full) + "\x1b[0m"
 }

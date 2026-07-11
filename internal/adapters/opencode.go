@@ -7,6 +7,7 @@ type opencodeAdapter struct{}
 func (opencodeAdapter) Name() string           { return "opencode" }
 func (opencodeAdapter) Bin() string            { return "opencode" }
 func (opencodeAdapter) Detect() (bool, string) { return detect("opencode") }
+func (opencodeAdapter) Installed() bool        { return installed("opencode") }
 
 func (opencodeAdapter) LaunchArgs(prompt string) []string {
 	if prompt == "" {

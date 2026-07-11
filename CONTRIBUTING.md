@@ -8,6 +8,7 @@ type Adapter interface {
     Name() string                                   // "myagent"
     Bin() string                                    // binary on PATH
     Detect() (installed bool, version string)       // use the shared detect() helper
+    Installed() bool                                // use the shared installed() helper — cheap, no version probe
     LaunchArgs(prompt string) []string              // argv for an interactive session
     QuotaError(exitCode int, output string) bool    // recognize the vendor's cap error
     Profile() Profile                               // strengths, quota window, install hint

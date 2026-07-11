@@ -54,8 +54,12 @@ func ShouldAnimate(noBannerFlag bool) bool {
 }
 
 // renderLine colorizes one row, batching consecutive same-role cells into a
-// single SGR run to minimize escape-code overhead.
-func renderLine(line string, roles map[int]string) string {
+// single SGR run to minimize escape-code overhead. With color=false it emits
+// no escape sequences at all (NO_COLOR compliance, per no-color.org).
+func renderLine(line string, roles map[int]string, color bool) string {
+	if !color {
+		return line
+	}
 	var sb strings.Builder
 	current := -2 // sentinel: no SGR emitted yet
 	for i, ch := range []rune(line) {
@@ -82,7 +86,7 @@ func renderLine(line string, roles map[int]string) string {
 	return sb.String()
 }
 
-func renderFrame(f frame) string {
+func renderFrame(f frame, color bool) string {
 	lines := strings.Split(f.Content, "\n")
 	out := make([]string, len(lines))
 	for r, line := range lines {
@@ -94,13 +98,15 @@ func renderFrame(f frame) string {
 				roles[cc] = role
 			}
 		}
-		out[r] = renderLine(line, roles)
+		out[r] = renderLine(line, roles, color)
 	}
 	return strings.Join(out, "\n")
 }
 
 // Play writes the banner to w. With animate=false it prints only the final
 // frame — no motion, no cursor tricks (safe for pipes and screen readers).
+// Per no-color.org, any non-empty NO_COLOR suppresses all SGR escapes, in
+// both the static and animated paths.
 func Play(w io.Writer, animate bool) error {
 	var anim animation
 	if err := json.Unmarshal(framesJSON, &anim); err != nil {
@@ -109,8 +115,9 @@ func Play(w io.Writer, animate bool) error {
 	if len(anim.Frames) == 0 {
 		return fmt.Errorf("banner: no frames")
 	}
+	color := os.Getenv("NO_COLOR") == ""
 	if !animate {
-		_, err := fmt.Fprintln(w, renderFrame(anim.Frames[len(anim.Frames)-1]))
+		_, err := fmt.Fprintln(w, renderFrame(anim.Frames[len(anim.Frames)-1], color))
 		return err
 	}
 	fmt.Fprint(w, "\x1b[?25l")
@@ -119,7 +126,7 @@ func Play(w io.Writer, animate bool) error {
 		if i > 0 {
 			fmt.Fprintf(w, "\x1b[%dA", anim.Height)
 		}
-		fmt.Fprintln(w, renderFrame(f))
+		fmt.Fprintln(w, renderFrame(f, color))
 		time.Sleep(time.Duration(f.Duration) * time.Millisecond)
 	}
 	return nil

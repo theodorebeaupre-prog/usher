@@ -1,6 +1,9 @@
 package adapters
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 func TestRegistryOrderAndLookup(t *testing.T) {
 	all := All()
@@ -31,6 +34,23 @@ func TestDetectUsesLookPath(t *testing.T) {
 	installed, version := a.Detect()
 	if !installed || version != "9.9.9 (fake)" {
 		t.Fatalf("Detect() = %v %q", installed, version)
+	}
+}
+
+func TestInstalledUsesLookPathOnly(t *testing.T) {
+	orig := lookPath
+	defer func() { lookPath = orig }()
+
+	a, _ := Get("claude")
+
+	lookPath = func(bin string) (string, error) { return "/fake/" + bin, nil }
+	if !a.Installed() {
+		t.Error("Installed() = false, want true when lookPath succeeds")
+	}
+
+	lookPath = func(bin string) (string, error) { return "", fmt.Errorf("not found") }
+	if a.Installed() {
+		t.Error("Installed() = true, want false when lookPath errors")
 	}
 }
 
