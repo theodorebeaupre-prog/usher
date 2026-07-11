@@ -7,7 +7,7 @@ import (
 
 func TestRegistryOrderAndLookup(t *testing.T) {
 	all := All()
-	want := []string{"claude", "codex", "gemini", "opencode"}
+	want := []string{"claude", "codex", "gemini", "opencode", "copilot", "cursor"}
 	if len(all) != len(want) {
 		t.Fatalf("want %d adapters, got %d", len(want), len(all))
 	}
@@ -92,6 +92,8 @@ func TestLaunchArgsPerAgent(t *testing.T) {
 		{"codex", []string{"fix it"}},
 		{"gemini", []string{"-i", "fix it"}},
 		{"opencode", []string{"--prompt", "fix it"}},
+		{"copilot", []string{"fix it"}},
+		{"cursor", []string{"fix it"}},
 	}
 	for _, c := range cases {
 		a, _ := Get(c.agent)
@@ -132,6 +134,8 @@ func TestHeadlessArgsPerAgent(t *testing.T) {
 		{"codex", []string{"exec", "fix it"}},
 		{"gemini", []string{"-p", "fix it"}},
 		{"opencode", []string{"run", "fix it"}},
+		{"copilot", []string{"-p", "fix it"}},
+		{"cursor", []string{"-p", "fix it"}},
 	}
 	for _, c := range cases {
 		a, ok := Get(c.agent)
