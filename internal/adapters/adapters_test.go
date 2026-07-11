@@ -2,6 +2,8 @@ package adapters
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -154,6 +156,22 @@ func TestHeadlessArgsPerAgent(t *testing.T) {
 		}
 		if a.HeadlessArgs("") != nil {
 			t.Errorf("%s: empty prompt must return nil", c.agent)
+		}
+	}
+}
+
+func TestQuotaPatternsMatchFixtures(t *testing.T) {
+	for _, a := range All() {
+		data, err := os.ReadFile(filepath.Join("testdata", "quota", a.Name()+".txt"))
+		if err != nil {
+			t.Errorf("%s: missing quota fixture: %v", a.Name(), err)
+			continue
+		}
+		if !a.QuotaError(1, string(data)) {
+			t.Errorf("%s: quota patterns do not match fixture %q", a.Name(), string(data))
+		}
+		if a.QuotaError(0, "compiled successfully, 0 warnings") {
+			t.Errorf("%s: patterns match benign output — too broad", a.Name())
 		}
 	}
 }

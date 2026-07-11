@@ -1,0 +1,1 @@
+Error: usage limit reached for your plan (429). Visit cursor.com/settings.
