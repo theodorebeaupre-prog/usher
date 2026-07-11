@@ -32,9 +32,14 @@ const defaultAgentBonus = 0.01
 func Rank(task, dir string, agents []AgentInfo, cfg config.Config) []Scored {
 	taskType := Classify(task)
 	pinnedAgent := cfg.Pins.Types[taskType]
+	bestLen := -1
 	for prefix, agent := range cfg.Pins.Paths {
-		if prefix != "" && strings.HasPrefix(dir, prefix) {
-			pinnedAgent = agent
+		if prefix == "" {
+			continue
+		}
+		p := strings.TrimSuffix(prefix, "/")
+		if (dir == p || strings.HasPrefix(dir, p+"/")) && len(p) > bestLen {
+			bestLen, pinnedAgent = len(p), agent
 		}
 	}
 

@@ -75,3 +75,26 @@ func TestDefaultAgentBreaksTies(t *testing.T) {
 		t.Fatalf("want default agent to win ties, got %+v", got)
 	}
 }
+
+func TestOverlappingPathPinsLongestWins(t *testing.T) {
+	cfg := config.Config{Pins: config.Pins{Paths: map[string]string{
+		"/repos":           "codex",
+		"/repos/photocull": "claude",
+	}}}
+	for i := 0; i < 20; i++ { // map order is randomized; assert determinism
+		got := Rank("fix the crash", "/repos/photocull/sub", agents(), cfg)
+		if got[0].Name != "claude" || !got[0].Pinned {
+			t.Fatalf("iteration %d: want longest prefix (claude) pinned, got %+v", i, got[0])
+		}
+	}
+}
+
+func TestPathPinRequiresComponentBoundary(t *testing.T) {
+	cfg := config.Config{Pins: config.Pins{Paths: map[string]string{"/repos/photo": "codex"}}}
+	got := Rank("fix the crash", "/repos/photocull/sub", agents(), cfg)
+	for _, r := range got {
+		if r.Pinned {
+			t.Fatalf("no pin should match /repos/photocull/sub, got %+v", got)
+		}
+	}
+}
