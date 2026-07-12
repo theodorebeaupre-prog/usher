@@ -124,12 +124,12 @@ $ usher -p "summarize the failing tests in one paragraph"
 The three failures share one cause: …     # stdout — envoyez-le où vous voulez
 ```
 
-Et la partie que votre job de nuit va adorer : si l'agent atteint sa limite, usher bascule automatiquement vers le meilleur suivant — chaque agent tenté au plus une fois, aucun humain requis. L'entrée standard reçue par tube est mise en tampon et rejouée à chaque tentative, donc l'agent de relève voit la même entrée que le premier.
+Et la partie que votre job de nuit va adorer : si l'agent atteint sa limite, usher bascule automatiquement vers le meilleur suivant — chaque agent tenté au plus une fois, aucun humain requis. L'entrée standard reçue par tube est mise en tampon et rejouée à chaque tentative, donc l'agent de relève voit la même entrée que le premier. Comme le premier agent a pu laisser du travail à moitié fait, le prompt rejoué est préfixé d'un avis de continuation — « un agent précédent travaillait déjà sur cette tâche ; inspectez `git status` avant de continuer » — et la tentative est marquée `"continuation_guard": true` dans l'enveloppe `--json` (désactivable avec `continuation_guard = false` dans la config).
 
 ```console
 $ usher -p "fix the crash"
 → claude  (debug task · headless)
-→ claude hit its cap — failing over to codex
+→ claude hit its cap — failing over to codex (with continuation notice)
 Patched the nil-check in auth.go; tests pass.
 ```
 
@@ -151,6 +151,7 @@ Aucune requise — usher fonctionne tel quel. Quand vous voulez des opinions, el
 
 default_agent = "claude"        # gagne les égalités
 disabled = ["opencode"]         # jamais routé ici
+continuation_guard = false      # pas d'avis « espace de travail peut-être modifié » en cas de bascule
 
 [weights.codex]                 # modifiez n'importe quelle force, par agent × type
 review = 0.99                   # types : debug feature refactor review docs test other

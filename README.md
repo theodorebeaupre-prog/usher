@@ -124,12 +124,12 @@ $ usher -p "summarize the failing tests in one paragraph"
 The three failures share one cause: …     # stdout — pipe it anywhere
 ```
 
-And the part your nightly job will love: if the agent hits its usage cap, usher automatically fails over to the next-best one — each agent tried at most once, no human required. Piped stdin is buffered and replayed to every attempt, so a failover agent sees the same input the first one did.
+And the part your nightly job will love: if the agent hits its usage cap, usher automatically fails over to the next-best one — each agent tried at most once, no human required. Piped stdin is buffered and replayed to every attempt, so a failover agent sees the same input the first one did. Because the first agent may have left partial work behind, the replayed prompt is prefixed with a continuation notice — "a previous agent was already working on this task; inspect `git status` before continuing" — and the attempt is marked `"continuation_guard": true` in the `--json` envelope (disable with `continuation_guard = false` in config).
 
 ```console
 $ usher -p "fix the crash"
 → claude  (debug task · headless)
-→ claude hit its cap — failing over to codex
+→ claude hit its cap — failing over to codex (with continuation notice)
 Patched the nil-check in auth.go; tests pass.
 ```
 
@@ -151,6 +151,7 @@ None required — usher works out of the box. When you want opinions, they live 
 
 default_agent = "claude"        # wins ties
 disabled = ["opencode"]         # never route here
+continuation_guard = false      # failover agents get no "workspace may be dirty" notice
 
 [weights.codex]                 # override any strength, per agent × task type
 review = 0.99                   # types: debug feature refactor review docs test other
