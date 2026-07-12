@@ -4,15 +4,16 @@
 
 ### One command. The right AI coding agent. Every time.
 
-You already pay for Claude Code, Codex, Gemini CLI… **usher decides which one gets the job** — routing on task type, each agent's strengths, and who still has quota left. Built on the subscriptions you have. **No API keys.**
+You already pay for Claude Code, Codex, Gemini CLI, Copilot… **usher decides which one gets the job** — routing on task type, each agent's strengths, and who still has quota left. Built on the subscriptions you have. **No API keys.**
 
-[![status](https://img.shields.io/badge/status-v0.3-4c1)](#roadmap)
+[![release](https://img.shields.io/github/v/release/theodorebeaupre-prog/usher?color=4c1)](https://github.com/theodorebeaupre-prog/usher/releases/latest)
+[![CI](https://github.com/theodorebeaupre-prog/usher/actions/workflows/ci.yml/badge.svg)](https://github.com/theodorebeaupre-prog/usher/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-8a8a8a)](LICENSE)
 [![made for](https://img.shields.io/badge/made_for-your_terminal-56b6c2)](#how-it-works)
 
 </div>
 
-> **v0.3.** Early but real — the examples below are live behavior. Found a rough edge? Issues welcome.
+> **v0.3 — feature-complete for the 1.0 freeze.** Every terminal example below is live behavior, not aspiration. Found a rough edge? [Issues welcome](https://github.com/theodorebeaupre-prog/usher/issues).
 
 ---
 
@@ -31,11 +32,19 @@ $ usher "fix the flaky auth test in photocull"
 
 …and you're inside a normal Claude Code session, in your repo, prompt already delivered. usher is a **launcher, not a wrapper** — it hands you the agent's real TUI and gets out of the way. Nothing sits between you and the tool you paid for.
 
-## Install
+## Quick start
 
 ```console
-$ brew install theodorebeaupre-prog/tap/usher   # macOS (Homebrew)
-$ go install github.com/theodorebeaupre-prog/usher@latest   # anywhere with Go
+$ go install github.com/theodorebeaupre-prog/usher@latest
+```
+
+Or grab a [prebuilt binary](https://github.com/theodorebeaupre-prog/usher/releases/latest) (macOS / Linux / Windows, amd64 + arm64). Homebrew: `brew install theodorebeaupre-prog/tap/usher` *(tap goes live shortly)*.
+
+Then take attendance, and go:
+
+```console
+$ usher doctor
+$ usher "explain what this repo does"
 ```
 
 ## How it works
@@ -43,8 +52,8 @@ $ go install github.com/theodorebeaupre-prog/usher@latest   # anywhere with Go
 Three things happen in the milliseconds before handoff — all local, no network call, works offline:
 
 1. **Detect** — finds which agent CLIs are installed (Claude Code, Codex, Gemini CLI, opencode, Amp, GitHub Copilot CLI, Cursor, Qwen Code).
-2. **Rank** — a transparent heuristic scores each agent: task-type classification (debug / feature / refactor / review / docs / test) × per-agent strength weights × a quota-confidence penalty × your pinned rules.
-3. **Exec** — replaces itself with the winner's interactive session. Full TTY, native experience, zero latency added where it counts.
+2. **Rank** — a transparent heuristic scores each agent: task-type classification (`debug / feature / refactor / review / docs / test / other`) × per-agent strength weights × a quota-confidence penalty × your pinned rules.
+3. **Exec** — hands you the winner's interactive session. Full TTY, native experience, zero latency added where it counts.
 
 Not sure why it picked what it picked? Ask it.
 
@@ -52,15 +61,18 @@ Not sure why it picked what it picked? Ask it.
 $ usher --why "review this PR for security issues"
 task type: review
 
-  agent    strengths  quota   pins   score
-  codex        0.92    1.00      —    0.92  ← launching
-  claude       0.85    0.71      —    0.60      (cap hit 38 min ago)
-  gemini       0.55    1.00      —    0.55
+  agent       strength   quota    pin   score
+  codex           0.95    1.00      —    0.95  ← launching
+  gemini          0.70    1.00      —    0.70
+  opencode        0.70    1.00      —    0.70
+  claude          0.85    0.71      —    0.60
 
-→ codex  (review task · best available)
+→ codex  (review task · quota OK · override with --agent)
 ```
 
-And when you disagree, you win: `usher --agent claude "…"` skips the scoring entirely, and a TOML config lets you re-weight anything or pin patterns for good (`review → codex`, `this repo → claude`).
+(That `0.71` is claude cooling down from a recent cap — strongest reviewer after codex, but usher routes around the wall instead of into it.)
+
+And when you disagree, you win: `usher --agent claude "…"` skips the scoring entirely, and a [config file](#configuration) lets you re-weight anything or pin patterns for good.
 
 ## Routing around rate limits
 
@@ -73,13 +85,11 @@ $ usher "add dark mode to the settings pane"
 → claude  (feature task · codex is capped — routed around it · override with --agent)
 ```
 
-Hit a cap *mid-session*? When the agent exits, usher notices and offers the runner-up. Your prompt travels with you; the retyping ritual is dead.
+Hit a cap *mid-session*? When the agent exits, usher notices, records it, and offers the runner-up. Your prompt travels with you; the retyping ritual is dead.
 
 ## Scripting & CI
 
-Headless mode: `-p` runs the winner's own print-and-exit mode — the answer
-lands on stdout, usher's routing chatter stays on stderr, and the agent's
-exit code is yours.
+Headless mode: `-p` runs the winner's own print-and-exit mode — the answer lands on stdout, usher's routing chatter stays on stderr, and the agent's exit code is yours.
 
 ```console
 $ usher -p "summarize the failing tests in one paragraph"
@@ -87,9 +97,7 @@ $ usher -p "summarize the failing tests in one paragraph"
 The three failures share one cause: …     # stdout — pipe it anywhere
 ```
 
-And the part your nightly job will love: if the agent hits its usage cap,
-usher automatically fails over to the next-best one — each agent tried at
-most once, no human required.
+And the part your nightly job will love: if the agent hits its usage cap, usher automatically fails over to the next-best one — each agent tried at most once, no human required. Piped stdin is buffered and replayed to every attempt, so a failover agent sees the same input the first one did.
 
 ```console
 $ usher -p "fix the crash"
@@ -98,19 +106,54 @@ $ usher -p "fix the crash"
 Patched the nil-check in auth.go; tests pass.
 ```
 
-Piped stdin is buffered and replayed to every attempt, so a failover agent sees the same input the first one did.
-
-For tooling, `--json` wraps the run in one machine-readable object (the only
-thing printed to stdout), and `--timeout` keeps a hung agent from stalling
-your pipeline (exit 124, GNU convention):
+For tooling, `--json` wraps the run in one machine-readable object (the only thing printed to stdout — final agent, task type, exit code, output, and a per-attempt array), and `--timeout` keeps a hung agent from stalling your pipeline: the whole process group is killed, exit 124, GNU convention.
 
 ```console
 $ usher -p --json --timeout 5m "fix the crash" | jq .agent
 "codex"
 ```
 
-The timeout applies per attempt, so a failover chain can take up to N× the value.
-On total failure the envelope's top-level exit_code mirrors the process exit code (the last attempt's entry may show -1 if it failed to start).
+The timeout applies per attempt, so a failover chain can take up to N× the value. On total failure the envelope's top-level `exit_code` mirrors the process exit code (the last attempt's entry may show `-1` if it failed to start).
+
+## Configuration
+
+None required — usher works out of the box. When you want opinions, they live in one TOML file:
+
+```toml
+# ~/.config/usher/config.toml — every key optional
+
+default_agent = "claude"        # wins ties
+disabled = ["opencode"]         # never route here
+
+[weights.codex]                 # override any strength, per agent × task type
+review = 0.99                   # types: debug feature refactor review docs test other
+
+[pins.types]                    # this task type ALWAYS goes to this agent
+review = "codex"
+
+[pins.paths]                    # work under this directory goes to this agent
+"/Users/you/work/monorepo" = "claude"   # longest matching prefix wins
+```
+
+Pins beat scores; `--agent` beats everything. Respects `XDG_CONFIG_HOME`; on Windows the file lives under `%AppData%\usher`.
+
+## Check the room
+
+`usher doctor` shows what's installed, each agent's quota confidence, and where your config and ledger live:
+
+```console
+$ usher doctor
+  claude     2.1.201 (Claude Code) quota ██████████ 100%
+  codex      codex-cli 0.142.0 quota ██████████ 100%
+  gemini     0.47.0         quota ██████████ 100%
+  opencode   1.17.18        quota ██████████ 100%
+  amp        not installed → npm install -g @sourcegraph/amp
+  copilot    not installed → npm install -g @github/copilot
+  cursor     not installed → curl https://cursor.com/install -fsS | bash
+  qwen       not installed → npm install -g @qwen-code/qwen-code
+  config: ~/.config/usher/config.toml (not found — using defaults)
+  ledger: ~/.config/usher/ledger.json (2 events, confidence not accounting)
+```
 
 ## Supported agents
 
@@ -126,6 +169,23 @@ On total failure the envelope's top-level exit_code mirrors the process exit cod
 | **Qwen Code** | Qwen free tier / ModelScope | ✅ v0.3 |
 | *yours?* | | [an adapter is one file](#contributing) |
 
+## FAQ
+
+**Is this okay with the vendors?**
+usher never touches an API, a token, or a login. It starts the same official CLI you'd start yourself — your install, your auth, their TUI — exactly like a shell alias with judgment. If you're allowed to type `claude`, you're allowed to have something type it for you.
+
+**Does usher phone home?**
+No. Zero network calls, zero telemetry. Detection is a PATH lookup, routing is local arithmetic, and the ledger is a JSON file in `~/.config/usher/` you can read (or delete) anytime.
+
+**Where's the AI in the routing?**
+There isn't one — keyword heuristics and your config, deterministic and explainable with `--why`. That's a feature: routing adds zero latency, works offline, and never burns quota deciding how to spend quota.
+
+**How accurate is "quota confidence"?**
+It's built from what usher has *seen* — launches and observed cap errors, decayed over each vendor's window. It's honest about being a signal, not accounting: vendors don't expose the real numbers to anyone.
+
+**My agent isn't supported.**
+[One file](CONTRIBUTING.md). Detection, launch args, cap-error patterns, a strength profile — copy an existing adapter and send the PR.
+
 ## Design principles
 
 - **Launcher, not wrapper.** usher never parses, filters, or rebrands an agent's output. You get the native tool, always.
@@ -137,15 +197,17 @@ On total failure the envelope's top-level exit_code mirrors the process exit cod
 
 - [x] Design spec — [read it](docs/superpowers/specs/2026-07-11-usher-design.md)
 - [x] Identity: wordmark + [animated terminal banner](assets/banner/) (engineering inspired by [GitHub Copilot CLI's banner](https://github.blog/engineering/from-pixels-to-characters-the-engineering-behind-github-copilot-clis-animated-ascii-banner/))
-- [x] v0.1 — adapters ×4, heuristic router, quota ledger, `doctor`, `--why`, Homebrew tap
-- [x] v0.2 — headless mode (-p) with auto-failover, Copilot + Cursor adapters
-- [x] v0.3 — --json envelope, --timeout guard, stdin replay, Qwen + Amp adapters
-- [ ] v1.0 — interface freeze, shell completions, man page, verified adapters
+- [x] v0.1 — adapters ×4, heuristic router, quota ledger, `doctor`, `--why`
+- [x] v0.2 — headless mode (`-p`) with auto-failover, Copilot + Cursor adapters
+- [x] v0.3 — `--json` envelope, `--timeout` guard, stdin replay, Qwen + Amp adapters
+- [ ] v1.0 — interface freeze, shell completions, man page, adapters verified on real machines
 - [ ] Later — optional LLM-assisted routing, multi-account support
 
 ## Contributing
 
-The whole architecture bends toward one contribution: **adding an agent is writing one file.** An adapter declares how to detect the CLI, how to launch it with a seeded prompt, how to recognize its rate-limit error, and its strength profile. That's the entire interface — see [CONTRIBUTING.md](CONTRIBUTING.md).
+The whole architecture bends toward one contribution: **adding an agent is writing one file.** An adapter declares how to detect the CLI, how to launch it (interactive and headless), how to recognize its rate-limit error, and its strength profile. That's the entire interface — see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+Adapters we'd love PRs for: **Aider**, **Goose**, **Droid** — or whichever CLI you're paying for that isn't in the table yet. A captured rate-limit error message from a real session is worth its weight in gold (all but one of our quota fixtures are reconstructions — help us replace them with the real thing).
 
 ## Meet the usher
 
@@ -164,5 +226,7 @@ $ usher
 [MIT](LICENSE) © 2026 ISO NORD CA
 
 <div align="center">
+<sub>If usher saved you a retype today, a ⭐ helps the next person find the door.</sub>
+<br><br>
 <sub>usher — <em>right this way.</em></sub>
 </div>
