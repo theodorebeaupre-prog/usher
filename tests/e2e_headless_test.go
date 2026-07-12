@@ -3,6 +3,7 @@
 package tests
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -183,6 +184,48 @@ if [ "$1" = "exec" ]; then echo "SHOULD_NOT_RUN"; exit 0; fi`)
 func TestTimeoutRequiresHeadless(t *testing.T) {
 	bin := buildUsher(t)
 	out, exit := run(t, bin, t.TempDir(), t.TempDir(), "--timeout", "5s", "fix the crash")
+	if exit == 0 || !strings.Contains(out, "requires -p") {
+		t.Errorf("want requires--p error, got exit %d: %s", exit, out)
+	}
+}
+
+func TestHeadlessJSONEnvelopeAfterFailover(t *testing.T) {
+	bin := buildUsher(t)
+	fakeDir, cfgHome := t.TempDir(), t.TempDir()
+	fakeAgent(t, fakeDir, "claude", `
+if [ "$1" = "--version" ]; then echo "1.0.0 (fake)"; exit 0; fi
+echo "usage limit reached" >&2; exit 1`)
+	fakeAgent(t, fakeDir, "codex", `
+if [ "$1" = "--version" ]; then echo "1.0.0 (fake)"; exit 0; fi
+if [ "$1" = "exec" ]; then echo "the answer"; exit 0; fi`)
+
+	stdout, stderr, exit := runSplit(t, bin, fakeDir, cfgHome, "--json", "-p", "fix the crash")
+	if exit != 0 {
+		t.Fatalf("exit = %d\nstderr: %s", exit, stderr)
+	}
+	var env struct {
+		Agent    string `json:"agent"`
+		TaskType string `json:"task_type"`
+		ExitCode int    `json:"exit_code"`
+		Output   string `json:"output"`
+		Attempts []struct {
+			Agent      string `json:"agent"`
+			QuotaError bool   `json:"quota_error"`
+		} `json:"attempts"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &env); err != nil {
+		t.Fatalf("stdout is not a single JSON object: %v\n%s", err, stdout)
+	}
+	if env.Agent != "codex" || env.TaskType != "debug" || env.ExitCode != 0 ||
+		!strings.Contains(env.Output, "the answer") ||
+		len(env.Attempts) != 2 || !env.Attempts[0].QuotaError || env.Attempts[0].Agent != "claude" {
+		t.Errorf("envelope wrong: %+v", env)
+	}
+}
+
+func TestJSONRequiresHeadless(t *testing.T) {
+	bin := buildUsher(t)
+	out, exit := run(t, bin, t.TempDir(), t.TempDir(), "--json", "fix the crash")
 	if exit == 0 || !strings.Contains(out, "requires -p") {
 		t.Errorf("want requires--p error, got exit %d: %s", exit, out)
 	}

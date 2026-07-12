@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -35,6 +36,7 @@ flags:
   --no-banner      skip the animated banner
   -p, --print      headless: run the agent's print-and-exit mode (for scripts/CI)
   --timeout <dur>  headless: kill the agent after this long (e.g. 90s, 2m); requires -p
+  --json           headless: wrap the result in a JSON envelope on stdout; requires -p
 
 config: ` + "~" + `/.config/usher/config.toml   (pins, weights, default_agent, disabled)`
 
@@ -59,6 +61,7 @@ func run(args []string) error {
 	fs.BoolVar(&headless, "p", false, "headless: print the agent's answer and exit (no chat UI)")
 	fs.BoolVar(&headless, "print", false, "alias of -p")
 	timeoutFlag := fs.Duration("timeout", 0, "headless: kill the agent after this long (e.g. 90s, 2m)")
+	jsonFlag := fs.Bool("json", false, "headless: wrap the result in a JSON envelope on stdout")
 	fs.Usage = func() { fmt.Fprintln(os.Stderr, usage) }
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -93,13 +96,16 @@ func run(args []string) error {
 	if *timeoutFlag != 0 && !headless {
 		return fmt.Errorf("--timeout requires -p (headless mode)")
 	}
+	if *jsonFlag && !headless {
+		return fmt.Errorf("--json requires -p (headless mode)")
+	}
 
 	task := strings.Join(rest, " ")
 	if headless {
 		if task == "" {
 			return fmt.Errorf("headless mode needs a task: usher -p \"<task>\"")
 		}
-		return cmdHeadless(task, *agentFlag, *whyFlag, *timeoutFlag)
+		return cmdHeadless(task, *agentFlag, *whyFlag, *timeoutFlag, *jsonFlag)
 	}
 	return cmdLaunch(task, *agentFlag, *whyFlag)
 }
@@ -176,7 +182,45 @@ func cmdLaunch(task, forced string, why bool) error {
 // it fails over to the next ranked agent automatically — each agent is
 // attempted at most once. A forced --agent skips ranking and failover
 // entirely.
-func cmdHeadless(task, forced string, why bool, timeout time.Duration) error {
+// jsonAttempt records one launch attempt for the --json envelope.
+type jsonAttempt struct {
+	Agent      string `json:"agent"`
+	ExitCode   int    `json:"exit_code"`
+	QuotaError bool   `json:"quota_error"`
+	TimedOut   bool   `json:"timed_out"`
+	DurationMS int64  `json:"duration_ms"`
+}
+
+// jsonEnvelope is the single JSON object --json prints to stdout in headless
+// mode: the final attempt's agent/exit/output, plus the full attempt trail.
+type jsonEnvelope struct {
+	Agent      string        `json:"agent"`
+	TaskType   string        `json:"task_type"`
+	ExitCode   int           `json:"exit_code"`
+	DurationMS int64         `json:"duration_ms"`
+	Output     string        `json:"output"`
+	Attempts   []jsonAttempt `json:"attempts"`
+}
+
+// emitJSON prints env as the one and only stdout write in --json mode.
+func emitJSON(env jsonEnvelope) {
+	b, err := json.Marshal(env)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "usher: could not marshal JSON envelope:", err)
+		return
+	}
+	fmt.Println(string(b))
+}
+
+func sumDurationsMS(attempts []jsonAttempt) int64 {
+	var total int64
+	for _, a := range attempts {
+		total += a.DurationMS
+	}
+	return total
+}
+
+func cmdHeadless(task, forced string, why bool, timeout time.Duration, asJSON bool) error {
 	now := time.Now()
 	cfg, err := config.Load(filepath.Join(config.Dir(), "config.toml"))
 	if err != nil {
@@ -230,37 +274,59 @@ func cmdHeadless(task, forced string, why bool, timeout time.Duration) error {
 
 	color := useColor()
 	exit := 0
+	var attempts []jsonAttempt
+	var output string
 	for i, choice := range ranked {
 		a, _ := adapters.Get(choice.Name)
 		fmt.Fprintf(os.Stderr, "%s  %s\n",
 			sgr(color, 96, "→ "+choice.Name),
 			sgr(color, 90, fmt.Sprintf("(%s task · headless)", choice.TaskType)))
 
-		opts := launch.Opts{Timeout: timeout}
+		opts := launch.Opts{Timeout: timeout, CaptureStdout: asJSON}
 		if stdinBuf != nil {
 			opts.Stdin = bytes.NewReader(stdinBuf)
 		}
 
-		var tail string
-		exit, _, tail, err = launch.Run(a.Bin(), a.HeadlessArgs(task), dir, opts)
+		var out, tail string
+		attemptStart := time.Now()
+		exit, out, tail, err = launch.Run(a.Bin(), a.HeadlessArgs(task), dir, opts)
+		durMS := time.Since(attemptStart).Milliseconds()
+		output = out
+
 		if errors.Is(err, launch.ErrTimeout) {
+			attempts = append(attempts, jsonAttempt{Agent: choice.Name, ExitCode: 124, TimedOut: true, DurationMS: durMS})
 			led.RecordLaunch(choice.Name, time.Now())
 			if err := led.Save(); err != nil {
 				fmt.Fprintln(os.Stderr, "usher: could not save ledger:", err)
 			}
 			fmt.Fprintf(os.Stderr, "usher: %s timed out after %s\n", choice.Name, timeout)
+			if asJSON {
+				emitJSON(jsonEnvelope{
+					Agent: choice.Name, TaskType: choice.TaskType, ExitCode: 124,
+					DurationMS: sumDurationsMS(attempts), Output: output, Attempts: attempts,
+				})
+			}
 			os.Exit(124)
 		}
 		if err != nil {
+			attempts = append(attempts, jsonAttempt{Agent: choice.Name, ExitCode: -1, DurationMS: durMS})
 			fmt.Fprintf(os.Stderr, "usher: %s failed to start: %v\n", choice.Name, err)
 			exit = 1
 			continue
 		}
+		quotaErr := exit != 0 && a.QuotaError(exit, tail)
+		attempts = append(attempts, jsonAttempt{Agent: choice.Name, ExitCode: exit, QuotaError: quotaErr, DurationMS: durMS})
 		led.RecordLaunch(choice.Name, time.Now())
 		if err := led.Save(); err != nil {
 			fmt.Fprintln(os.Stderr, "usher: could not save ledger:", err)
 		}
-		if exit == 0 || !a.QuotaError(exit, tail) {
+		if exit == 0 || !quotaErr {
+			if asJSON {
+				emitJSON(jsonEnvelope{
+					Agent: choice.Name, TaskType: choice.TaskType, ExitCode: exit,
+					DurationMS: sumDurationsMS(attempts), Output: output, Attempts: attempts,
+				})
+			}
 			os.Exit(exit)
 		}
 		led.RecordQuota(choice.Name, time.Now())
@@ -273,6 +339,13 @@ func cmdHeadless(task, forced string, why bool, timeout time.Duration) error {
 		}
 	}
 	fmt.Fprintln(os.Stderr, "usher: every available agent is capped or failed — exiting with the last agent's code")
+	if asJSON {
+		last := ranked[len(ranked)-1]
+		emitJSON(jsonEnvelope{
+			Agent: last.Name, TaskType: last.TaskType, ExitCode: exit,
+			DurationMS: sumDurationsMS(attempts), Output: output, Attempts: attempts,
+		})
+	}
 	os.Exit(exit)
 	return nil
 }
