@@ -88,8 +88,11 @@ echo "unexpected: $@" >&2; exit 9`)
 	if exit != 0 {
 		t.Fatalf("exit = %d\nstderr: %s", exit, stderr)
 	}
-	if !strings.Contains(stdout, "CODEX_RESULT: fix the crash") {
-		t.Errorf("failover output missing:\n%s", stdout)
+	// Since v0.3.2 the failover prompt opens with the continuation notice;
+	// the original task must still arrive, untouched, at the end.
+	if !strings.Contains(stdout, "CODEX_RESULT: [usher failover]") ||
+		!strings.Contains(stdout, "\n\nfix the crash") {
+		t.Errorf("failover output missing guard or task:\n%s", stdout)
 	}
 	if !strings.Contains(stderr, "failing over to codex") {
 		t.Errorf("failover notice missing from stderr:\n%s", stderr)
@@ -268,5 +271,114 @@ echo "syntax error in prompt" >&2; exit 7`)
 	}
 	if strings.Contains(stderr, "failing over") {
 		t.Errorf("non-quota failure must not trigger failover:\n%s", stderr)
+	}
+}
+
+// The four-step scenario from launch-day feedback: agent A edits, A hits its
+// cap, usher launches B — B's prompt must announce the possibly-dirty
+// workspace, and the JSON envelope must show which attempt was guarded.
+func TestHeadlessFailoverContinuationGuard(t *testing.T) {
+	bin := buildUsher(t)
+	fakeDir, cfgHome := t.TempDir(), t.TempDir()
+	promptFile := filepath.Join(t.TempDir(), "codex-prompt.txt")
+	fakeAgent(t, fakeDir, "claude", `
+if [ "$1" = "--version" ]; then echo "1.0.0 (fake)"; exit 0; fi
+echo "usage limit reached" >&2; exit 1`)
+	fakeAgent(t, fakeDir, "codex", `
+if [ "$1" = "--version" ]; then echo "1.0.0 (fake)"; exit 0; fi
+if [ "$1" = "exec" ]; then printf '%s' "$2" > "`+promptFile+`"; echo "CODEX_RESULT"; exit 0; fi
+echo "unexpected: $@" >&2; exit 9`)
+
+	stdout, stderr, exit := runSplit(t, bin, fakeDir, cfgHome, "-p", "--json", "fix the crash")
+	if exit != 0 {
+		t.Fatalf("exit = %d\nstderr: %s", exit, stderr)
+	}
+	if !strings.Contains(stderr, "failing over to codex (with continuation notice)") {
+		t.Errorf("stderr missing continuation hint:\n%s", stderr)
+	}
+	var env struct {
+		Attempts []struct {
+			Agent             string `json:"agent"`
+			ContinuationGuard bool   `json:"continuation_guard"`
+		} `json:"attempts"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &env); err != nil {
+		t.Fatalf("envelope: %v\n%s", err, stdout)
+	}
+	if len(env.Attempts) != 2 || env.Attempts[0].ContinuationGuard || !env.Attempts[1].ContinuationGuard {
+		t.Errorf("want guard on attempt 2 only: %+v", env.Attempts)
+	}
+	got, err := os.ReadFile(promptFile)
+	if err != nil {
+		t.Fatalf("codex never received the prompt: %v", err)
+	}
+	p := string(got)
+	if !strings.HasPrefix(p, "[usher failover] A previous agent (claude) ") ||
+		!strings.HasSuffix(p, "\n\nfix the crash") {
+		t.Errorf("guarded prompt wrong:\n%q", p)
+	}
+}
+
+// An agent that fails to START never touched the workspace — no guard. The
+// claude fake has the execute bit (so PATH detection accepts it) but a dead
+// shebang, so the actual exec fails with ENOENT: a start failure, not a run.
+func TestHeadlessStartFailureIsNotAPrior(t *testing.T) {
+	bin := buildUsher(t)
+	fakeDir, cfgHome := t.TempDir(), t.TempDir()
+	promptFile := filepath.Join(t.TempDir(), "codex-prompt.txt")
+	if err := os.WriteFile(filepath.Join(fakeDir, "claude"),
+		[]byte("#!/no/such/interpreter\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	fakeAgent(t, fakeDir, "codex", `
+if [ "$1" = "--version" ]; then echo "1.0.0 (fake)"; exit 0; fi
+if [ "$1" = "exec" ]; then printf '%s' "$2" > "`+promptFile+`"; echo "CODEX_RESULT"; exit 0; fi
+echo "unexpected: $@" >&2; exit 9`)
+
+	_, stderr, exit := runSplit(t, bin, fakeDir, cfgHome, "-p", "fix the crash")
+	if exit != 0 {
+		t.Fatalf("exit = %d\nstderr: %s", exit, stderr)
+	}
+	got, err := os.ReadFile(promptFile)
+	if err != nil {
+		t.Fatalf("codex never received the prompt: %v", err)
+	}
+	if string(got) != "fix the crash" {
+		t.Errorf("start-failure must not trigger the guard, got:\n%q", string(got))
+	}
+}
+
+// continuation_guard = false restores pre-v0.3.2 behavior byte-for-byte.
+func TestHeadlessContinuationGuardOptOut(t *testing.T) {
+	bin := buildUsher(t)
+	fakeDir, cfgHome := t.TempDir(), t.TempDir()
+	promptFile := filepath.Join(t.TempDir(), "codex-prompt.txt")
+	if err := os.MkdirAll(filepath.Join(cfgHome, "usher"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cfgHome, "usher", "config.toml"),
+		[]byte("continuation_guard = false\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	fakeAgent(t, fakeDir, "claude", `
+if [ "$1" = "--version" ]; then echo "1.0.0 (fake)"; exit 0; fi
+echo "usage limit reached" >&2; exit 1`)
+	fakeAgent(t, fakeDir, "codex", `
+if [ "$1" = "--version" ]; then echo "1.0.0 (fake)"; exit 0; fi
+if [ "$1" = "exec" ]; then printf '%s' "$2" > "`+promptFile+`"; echo "CODEX_RESULT"; exit 0; fi
+echo "unexpected: $@" >&2; exit 9`)
+
+	stdout, stderr, exit := runSplit(t, bin, fakeDir, cfgHome, "-p", "--json", "fix the crash")
+	if exit != 0 {
+		t.Fatalf("exit = %d\nstderr: %s", exit, stderr)
+	}
+	if strings.Contains(stdout, "continuation_guard") {
+		t.Errorf("opted-out envelope must not mention the guard: %s", stdout)
+	}
+	if strings.Contains(stderr, "(with continuation notice)") {
+		t.Errorf("opted-out stderr must not mention the notice:\n%s", stderr)
+	}
+	if got, _ := os.ReadFile(promptFile); string(got) != "fix the crash" {
+		t.Errorf("opted-out prompt must be bare, got:\n%q", string(got))
 	}
 }

@@ -216,8 +216,10 @@ echo "unexpected: $@" >&2; exit 9`)
 }
 
 // An agent that fails to START never touched the workspace — no guard.
-// The claude fake passes detection (--version) then revokes its own execute
-// bit, so the real launch fails with EACCES.
+// DEVIATION (found during execution): headless detection uses LookPath only,
+// never --version, so a chmod-during-version trick can't work. Instead the
+// claude fake is an executable file with a dead shebang: detection accepts
+// it, exec fails with ENOENT.
 func TestHeadlessStartFailureIsNotAPrior(t *testing.T) {
 	bin := buildUsher(t)
 	fakeDir, cfgHome := t.TempDir(), t.TempDir()

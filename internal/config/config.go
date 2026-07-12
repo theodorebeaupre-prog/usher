@@ -17,10 +17,18 @@ type Pins struct {
 }
 
 type Config struct {
-	DefaultAgent string                        `toml:"default_agent"`
-	Disabled     []string                      `toml:"disabled"`
-	Weights      map[string]map[string]float64 `toml:"weights"` // agent -> task type -> weight
-	Pins         Pins                          `toml:"pins"`
+	DefaultAgent      string                        `toml:"default_agent"`
+	Disabled          []string                      `toml:"disabled"`
+	Weights           map[string]map[string]float64 `toml:"weights"` // agent -> task type -> weight
+	Pins              Pins                          `toml:"pins"`
+	ContinuationGuard *bool                         `toml:"continuation_guard"`
+}
+
+// ContinuationGuardEnabled reports whether failover prompts carry the
+// continuation notice. Pointer so "absent" (default on) is distinguishable
+// from an explicit false.
+func (c Config) ContinuationGuardEnabled() bool {
+	return c.ContinuationGuard == nil || *c.ContinuationGuard
 }
 
 // Load reads a config file. A missing file is not an error — usher must
