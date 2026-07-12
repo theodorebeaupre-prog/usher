@@ -53,6 +53,8 @@ $ usher "explain what this repo does"
 
 ## How it works
 
+<div align="center"><img src="assets/demo/usher-demo.gif" alt="usher demo: doctor, --why routing table, headless failover, animated banner" width="760"></div>
+
 Three things happen in the milliseconds before handoff — all local, no network call, works offline:
 
 1. **Detect** — finds which agent CLIs are installed (Claude Code, Codex, Gemini CLI, opencode, Amp, GitHub Copilot CLI, Cursor, Qwen Code).

@@ -53,6 +53,8 @@ $ usher "explique ce que fait ce dépôt"
 
 ## Comment ça marche
 
+<div align="center"><img src="assets/demo/usher-demo.gif" alt="démo usher : doctor, table de routage --why, bascule headless, bannière animée" width="760"></div>
+
 Trois choses se passent dans les millisecondes avant la passation — tout en local, sans appel réseau, même hors ligne :
 
 1. **Détection** — trouve les CLI d'agents installées (Claude Code, Codex, Gemini CLI, opencode, Amp, GitHub Copilot CLI, Cursor, Qwen Code).
