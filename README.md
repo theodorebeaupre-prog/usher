@@ -172,6 +172,9 @@ $ usher doctor
 
 ## FAQ
 
+**How do I connect my Claude / ChatGPT / Copilot account?**
+You don't — there's nothing to connect. usher runs the same CLI commands you already use (`claude`, `codex`, …), with the logins they already have. If an agent works when you type its name, usher can route to it; `usher doctor` shows you exactly who's in the room.
+
 **Is this okay with the vendors?**
 usher never touches an API, a token, or a login. It starts the same official CLI you'd start yourself — your install, your auth, their TUI — exactly like a shell alias with judgment. If you're allowed to type `claude`, you're allowed to have something type it for you.
 
