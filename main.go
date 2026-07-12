@@ -207,6 +207,17 @@ func emitJSON(env jsonEnvelope) {
 	fmt.Println(string(b))
 }
 
+// guardedPrompt prepends the failover continuation notice when a previous
+// agent actually ran: replaying the bare prompt would let the next agent
+// assume an untouched workspace. priorAgents is in attempt order.
+func guardedPrompt(task string, priorAgents []string) string {
+	if len(priorAgents) == 0 {
+		return task
+	}
+	return fmt.Sprintf("[usher failover] A previous agent (%s) was already working on this task and hit its usage cap; the workspace may contain partial changes. Inspect `git status` and the diff before continuing — do not assume the task is untouched.\n\n%s",
+		strings.Join(priorAgents, ", "), task)
+}
+
 func sumDurationsMS(attempts []jsonAttempt) int64 {
 	var total int64
 	for _, a := range attempts {
