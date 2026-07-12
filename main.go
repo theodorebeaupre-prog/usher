@@ -229,7 +229,7 @@ func cmdHeadless(task, forced string, why bool) error {
 		}
 
 		var tail string
-		exit, tail, err = launch.Run(a.Bin(), a.HeadlessArgs(task), dir)
+		exit, _, tail, err = launch.Run(a.Bin(), a.HeadlessArgs(task), dir, launch.Opts{})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "usher: %s failed to start: %v\n", choice.Name, err)
 			exit = 1
@@ -273,7 +273,7 @@ func launchWithFallback(choice router.Scored, ranked []router.Scored, task, dir 
 		fmt.Fprintln(os.Stderr, "usher: could not save ledger:", err)
 	}
 	a, _ := adapters.Get(choice.Name)
-	exit, tail, err := launch.Run(a.Bin(), a.LaunchArgs(task), dir)
+	exit, _, tail, err := launch.Run(a.Bin(), a.LaunchArgs(task), dir, launch.Opts{})
 	if err != nil {
 		// The CLI vanished between detect and exec — offer the runner-up
 		// instead of dying (spec: error handling, adapter launch failure).

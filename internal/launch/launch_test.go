@@ -1,9 +1,11 @@
 package launch
 
 import (
+	"errors"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestTailKeepsLastBytes(t *testing.T) {
@@ -27,7 +29,7 @@ func TestRunCapturesExitAndStderr(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("uses sh")
 	}
-	exit, tail, err := Run("sh", []string{"-c", "echo boom >&2; exit 3"}, t.TempDir())
+	exit, _, tail, err := Run("sh", []string{"-c", "echo boom >&2; exit 3"}, t.TempDir(), Opts{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,8 +42,55 @@ func TestRunCapturesExitAndStderr(t *testing.T) {
 }
 
 func TestRunMissingBinary(t *testing.T) {
-	_, _, err := Run("definitely-not-a-real-binary-xyz", nil, t.TempDir())
+	_, _, _, err := Run("definitely-not-a-real-binary-xyz", nil, t.TempDir(), Opts{})
 	if err == nil {
 		t.Fatal("want error for missing binary")
+	}
+}
+
+func TestRunTimeoutKillsChild(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses sh")
+	}
+	start := time.Now()
+	exit, _, _, err := Run("sh", []string{"-c", "sleep 5"}, t.TempDir(), Opts{Timeout: 300 * time.Millisecond})
+	if !errors.Is(err, ErrTimeout) {
+		t.Fatalf("want ErrTimeout, got %v", err)
+	}
+	if exit != 124 {
+		t.Errorf("exit = %d, want 124", exit)
+	}
+	if time.Since(start) > 3*time.Second {
+		t.Error("child was not killed promptly")
+	}
+}
+
+func TestRunStdinOverride(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses sh")
+	}
+	exit, out, _, err := Run("sh", []string{"-c", "cat"}, t.TempDir(),
+		Opts{Stdin: strings.NewReader("replayed"), CaptureStdout: true})
+	if err != nil || exit != 0 {
+		t.Fatalf("exit=%d err=%v", exit, err)
+	}
+	if out != "replayed" {
+		t.Errorf("stdout = %q, want %q", out, "replayed")
+	}
+}
+
+func TestRunCaptureStdout(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses sh")
+	}
+	_, out, tail, err := Run("sh", []string{"-c", "echo OUT; echo ERR >&2"}, t.TempDir(), Opts{CaptureStdout: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(out) != "OUT" {
+		t.Errorf("stdout = %q", out)
+	}
+	if !strings.Contains(tail, "ERR") {
+		t.Errorf("stderr tail = %q", tail)
 	}
 }
