@@ -4,7 +4,7 @@ One file per agent: a rate-limit/usage-cap error string the adapter's
 QuotaError patterns MUST match. Provenance:
 
 - claude.txt — format captured from a real Claude Code cap event (v0.1).
-- codex.txt, gemini.txt, opencode.txt, copilot.txt, cursor.txt — best-guess
+- codex.txt, gemini.txt, opencode.txt, copilot.txt, cursor.txt, qwen.txt, amp.txt — best-guess
   reconstructions from vendor docs/issue trackers; NOT captured live.
   Replace with a real capture when one is observed and note it here.
 

@@ -40,7 +40,7 @@ type Adapter interface {
 func All() []Adapter {
 	return []Adapter{
 		claudeAdapter{}, codexAdapter{}, geminiAdapter{}, opencodeAdapter{},
-		copilotAdapter{}, cursorAdapter{},
+		ampAdapter{}, copilotAdapter{}, cursorAdapter{}, qwenAdapter{},
 	}
 }
 
