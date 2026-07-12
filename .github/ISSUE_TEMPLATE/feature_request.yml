@@ -1,0 +1,18 @@
+name: Feature request
+description: An idea that would make usher seat you better
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What ritual, friction, or wall are you hitting?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: The idea
+      description: How should usher handle it? (Keep the design principles in mind — launcher not wrapper, no API keys, boring reliability.)
+    validations:
+      required: true

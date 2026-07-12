@@ -1,0 +1,45 @@
+name: Adapter request
+description: Ask for (or offer to build) support for another agent CLI
+labels: [adapter, help wanted]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        An adapter is **one file** — see [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md). If you can fill in the fields below, you (or we) can ship it fast.
+  - type: input
+    id: agent
+    attributes:
+      label: Agent name + CLI binary
+      placeholder: "Aider — binary: aider"
+    validations:
+      required: true
+  - type: input
+    id: install
+    attributes:
+      label: Install command
+      placeholder: pip install aider-chat
+  - type: input
+    id: subscription
+    attributes:
+      label: What subscription/plan does it ride?
+      placeholder: OpenAI/Anthropic API keys, or vendor plan name
+  - type: textarea
+    id: flags
+    attributes:
+      label: Launch flags (if you know them)
+      description: "How do you start an interactive session with a seeded prompt? Is there a print-and-exit (headless) mode?"
+      placeholder: |
+        interactive: aider --message "…"
+        headless: aider --message "…" --yes-always
+  - type: textarea
+    id: caperror
+    attributes:
+      label: "Gold: a captured rate-limit error"
+      description: If you've ever hit this CLI's usage cap, paste the exact error text — real captures replace our reconstructions.
+      render: console
+  - type: checkboxes
+    id: pr
+    attributes:
+      label: Contribution
+      options:
+        - label: I'd like to send the PR myself
