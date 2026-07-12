@@ -35,10 +35,11 @@ $ usher "fix the flaky auth test in photocull"
 ## Quick start
 
 ```console
-$ go install github.com/theodorebeaupre-prog/usher@latest
+$ brew install theodorebeaupre-prog/tap/usher              # macOS
+$ go install github.com/theodorebeaupre-prog/usher@latest  # anywhere with Go
 ```
 
-Or grab a [prebuilt binary](https://github.com/theodorebeaupre-prog/usher/releases/latest) (macOS / Linux / Windows, amd64 + arm64). Homebrew: `brew install theodorebeaupre-prog/tap/usher` *(tap goes live shortly)*.
+Or grab a [prebuilt binary](https://github.com/theodorebeaupre-prog/usher/releases/latest) (macOS / Linux / Windows, amd64 + arm64).
 
 Then take attendance, and go:
 
