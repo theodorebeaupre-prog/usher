@@ -32,6 +32,7 @@ flags:
   --why            print the scoring table before launching
   --no-banner      skip the animated banner
   -p, --print      headless: run the agent's print-and-exit mode (for scripts/CI)
+  --timeout <dur>  headless: kill the agent after this long (e.g. 90s, 2m); requires -p
 
 config: ` + "~" + `/.config/usher/config.toml   (pins, weights, default_agent, disabled)`
 
@@ -55,6 +56,7 @@ func run(args []string) error {
 	var headless bool
 	fs.BoolVar(&headless, "p", false, "headless: print the agent's answer and exit (no chat UI)")
 	fs.BoolVar(&headless, "print", false, "alias of -p")
+	timeoutFlag := fs.Duration("timeout", 0, "headless: kill the agent after this long (e.g. 90s, 2m)")
 	fs.Usage = func() { fmt.Fprintln(os.Stderr, usage) }
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -86,12 +88,16 @@ func run(args []string) error {
 		}
 	}
 
+	if *timeoutFlag != 0 && !headless {
+		return fmt.Errorf("--timeout requires -p (headless mode)")
+	}
+
 	task := strings.Join(rest, " ")
 	if headless {
 		if task == "" {
 			return fmt.Errorf("headless mode needs a task: usher -p \"<task>\"")
 		}
-		return cmdHeadless(task, *agentFlag, *whyFlag)
+		return cmdHeadless(task, *agentFlag, *whyFlag, *timeoutFlag)
 	}
 	return cmdLaunch(task, *agentFlag, *whyFlag)
 }
@@ -168,7 +174,7 @@ func cmdLaunch(task, forced string, why bool) error {
 // it fails over to the next ranked agent automatically — each agent is
 // attempted at most once. A forced --agent skips ranking and failover
 // entirely.
-func cmdHeadless(task, forced string, why bool) error {
+func cmdHeadless(task, forced string, why bool, timeout time.Duration) error {
 	now := time.Now()
 	cfg, err := config.Load(filepath.Join(config.Dir(), "config.toml"))
 	if err != nil {
@@ -229,7 +235,11 @@ func cmdHeadless(task, forced string, why bool) error {
 		}
 
 		var tail string
-		exit, _, tail, err = launch.Run(a.Bin(), a.HeadlessArgs(task), dir, launch.Opts{})
+		exit, _, tail, err = launch.Run(a.Bin(), a.HeadlessArgs(task), dir, launch.Opts{Timeout: timeout})
+		if errors.Is(err, launch.ErrTimeout) {
+			fmt.Fprintf(os.Stderr, "usher: %s timed out after %s\n", choice.Name, timeout)
+			os.Exit(124)
+		}
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "usher: %s failed to start: %v\n", choice.Name, err)
 			exit = 1

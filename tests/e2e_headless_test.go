@@ -131,6 +131,36 @@ func TestHeadlessNoAgentsError(t *testing.T) {
 	}
 }
 
+func TestHeadlessTimeout(t *testing.T) {
+	bin := buildUsher(t)
+	fakeDir, cfgHome := t.TempDir(), t.TempDir()
+	fakeAgent(t, fakeDir, "claude", `
+if [ "$1" = "--version" ]; then echo "1.0.0 (fake)"; exit 0; fi
+/bin/sleep 30`)
+	fakeAgent(t, fakeDir, "codex", `
+if [ "$1" = "--version" ]; then echo "1.0.0 (fake)"; exit 0; fi
+if [ "$1" = "exec" ]; then echo "SHOULD_NOT_RUN"; exit 0; fi`)
+
+	stdout, stderr, exit := runSplit(t, bin, fakeDir, cfgHome, "--timeout", "1s", "-p", "fix the crash")
+	if exit != 124 {
+		t.Errorf("exit = %d, want 124\nstderr: %s", exit, stderr)
+	}
+	if !strings.Contains(stderr, "timed out after 1s") {
+		t.Errorf("missing timeout notice:\n%s", stderr)
+	}
+	if strings.Contains(stdout, "SHOULD_NOT_RUN") || strings.Contains(stderr, "failing over") {
+		t.Error("timeout must not fail over")
+	}
+}
+
+func TestTimeoutRequiresHeadless(t *testing.T) {
+	bin := buildUsher(t)
+	out, exit := run(t, bin, t.TempDir(), t.TempDir(), "--timeout", "5s", "fix the crash")
+	if exit == 0 || !strings.Contains(out, "requires -p") {
+		t.Errorf("want requires--p error, got exit %d: %s", exit, out)
+	}
+}
+
 func TestHeadlessNonQuotaExitPropagates(t *testing.T) {
 	bin := buildUsher(t)
 	fakeDir, cfgHome := t.TempDir(), t.TempDir()
