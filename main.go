@@ -72,6 +72,13 @@ func run(args []string) error {
 	}
 	rest := fs.Args()
 
+	if *timeoutFlag != 0 && !headless {
+		return fmt.Errorf("--timeout requires -p (headless mode)")
+	}
+	if *jsonFlag && !headless {
+		return fmt.Errorf("--json requires -p (headless mode)")
+	}
+
 	if len(rest) > 0 {
 		switch rest[0] {
 		case "list":
@@ -91,13 +98,6 @@ func run(args []string) error {
 		if strings.HasPrefix(w, "-") {
 			return fmt.Errorf("flag %q must come before the task — usage: usher [flags] \"<task>\"", w)
 		}
-	}
-
-	if *timeoutFlag != 0 && !headless {
-		return fmt.Errorf("--timeout requires -p (headless mode)")
-	}
-	if *jsonFlag && !headless {
-		return fmt.Errorf("--json requires -p (headless mode)")
 	}
 
 	task := strings.Join(rest, " ")

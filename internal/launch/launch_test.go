@@ -52,16 +52,20 @@ func TestRunTimeoutKillsChild(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("uses sh")
 	}
+	// The direct child spawns a grandchild (/bin/sleep 30) that inherits the
+	// stderr pipe and outlives the direct child's own /bin/sleep 5 — this
+	// reproduces the real bug, where exec.CommandContext only kills the
+	// direct child and Wait blocks on the orphaned grandchild's pipe.
 	start := time.Now()
-	exit, _, _, err := Run("sh", []string{"-c", "sleep 5"}, t.TempDir(), Opts{Timeout: 300 * time.Millisecond})
+	exit, _, _, err := Run("sh", []string{"-c", "/bin/sleep 30 & /bin/sleep 5"}, t.TempDir(), Opts{Timeout: 300 * time.Millisecond})
 	if !errors.Is(err, ErrTimeout) {
 		t.Fatalf("want ErrTimeout, got %v", err)
 	}
 	if exit != 124 {
 		t.Errorf("exit = %d, want 124", exit)
 	}
-	if time.Since(start) > 3*time.Second {
-		t.Error("child was not killed promptly")
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Errorf("child was not killed promptly: took %s", elapsed)
 	}
 }
 

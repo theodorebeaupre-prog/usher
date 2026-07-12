@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestHeadlessStdinReplayedToFailoverAgent verifies piped stdin is buffered
@@ -169,7 +170,9 @@ if [ "$1" = "--version" ]; then echo "1.0.0 (fake)"; exit 0; fi
 if [ "$1" = "--version" ]; then echo "1.0.0 (fake)"; exit 0; fi
 if [ "$1" = "exec" ]; then echo "SHOULD_NOT_RUN"; exit 0; fi`)
 
+	start := time.Now()
 	stdout, stderr, exit := runSplit(t, bin, fakeDir, cfgHome, "--timeout", "1s", "-p", "fix the crash")
+	elapsed := time.Since(start)
 	if exit != 124 {
 		t.Errorf("exit = %d, want 124\nstderr: %s", exit, stderr)
 	}
@@ -179,11 +182,32 @@ if [ "$1" = "exec" ]; then echo "SHOULD_NOT_RUN"; exit 0; fi`)
 	if strings.Contains(stdout, "SHOULD_NOT_RUN") || strings.Contains(stderr, "failing over") {
 		t.Error("timeout must not fail over")
 	}
+	// The fake claude's /bin/sleep 30 grandchild must not block us — with a
+	// generous CI margin, well under the ~31s this took before the fix.
+	if elapsed > 10*time.Second {
+		t.Errorf("took %s to return after timeout, want well under 10s", elapsed)
+	}
 }
 
 func TestTimeoutRequiresHeadless(t *testing.T) {
 	bin := buildUsher(t)
 	out, exit := run(t, bin, t.TempDir(), t.TempDir(), "--timeout", "5s", "fix the crash")
+	if exit == 0 || !strings.Contains(out, "requires -p") {
+		t.Errorf("want requires--p error, got exit %d: %s", exit, out)
+	}
+}
+
+func TestTimeoutRequiresHeadlessBeforeDoctor(t *testing.T) {
+	bin := buildUsher(t)
+	out, exit := run(t, bin, t.TempDir(), t.TempDir(), "--timeout", "5s", "doctor")
+	if exit == 0 || !strings.Contains(out, "requires -p") {
+		t.Errorf("want requires--p error, got exit %d: %s", exit, out)
+	}
+}
+
+func TestJSONRequiresHeadlessBeforeList(t *testing.T) {
+	bin := buildUsher(t)
+	out, exit := run(t, bin, t.TempDir(), t.TempDir(), "--json", "list")
 	if exit == 0 || !strings.Contains(out, "requires -p") {
 		t.Errorf("want requires--p error, got exit %d: %s", exit, out)
 	}

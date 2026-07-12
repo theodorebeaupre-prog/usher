@@ -109,6 +109,9 @@ $ usher -p --json --timeout 5m "fix the crash" | jq .agent
 "codex"
 ```
 
+The timeout applies per attempt, so a failover chain can take up to N× the value.
+On total failure the envelope's top-level exit_code mirrors the process exit code (the last attempt's entry may show -1 if it failed to start).
+
 ## Supported agents
 
 | Agent | Subscription it uses | Adapter |

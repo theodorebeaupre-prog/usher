@@ -67,10 +67,31 @@ func Run(bin string, args []string, dir string, opts Opts) (int, string, string,
 	}
 	cmd.Stderr = io.MultiWriter(os.Stderr, tail)
 
+	// WaitDelay bounds how long Wait blocks after the context is canceled:
+	// once ctx expires, Cmd abandons any pipes still open (e.g. held by an
+	// orphaned grandchild) and Wait returns instead of hanging forever.
+	cmd.WaitDelay = 2 * time.Second
+
+	// Only put the child in its own process group when a timeout is in
+	// play. Setpgid moves the child out of the terminal's foreground
+	// process group, so in interactive mode (Timeout == 0) it would break
+	// Ctrl-C delivery and cause SIGTTIN on any TTY read from a background
+	// group. Timeout is headless-only, so there's no foreground-group
+	// concern there — and killing the whole group is what lets a hung
+	// agent's grandchildren (e.g. a stray `sleep`) die with it instead of
+	// leaking and holding the stderr pipe open.
+	if opts.Timeout > 0 {
+		procGroup(cmd)
+	}
+
 	signal.Ignore(os.Interrupt)
 	defer signal.Reset(os.Interrupt)
 
 	err = cmd.Run()
+	// This must be checked before any error-type inspection below: once the
+	// context deadline fires, cmd.Run's error could be exec.ErrWaitDelay (if
+	// Wait had to abandon pipes) or an *exec.ExitError from the kill signal.
+	// Either way a timeout is a timeout, not the generic error path.
 	if ctx.Err() == context.DeadlineExceeded {
 		return 124, outBuf.String(), tail.String(), ErrTimeout
 	}
