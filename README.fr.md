@@ -10,6 +10,7 @@ Vous payez déjà pour Claude Code, Codex, Gemini CLI, Copilot… **usher décid
 [![CI](https://github.com/theodorebeaupre-prog/usher/actions/workflows/ci.yml/badge.svg)](https://github.com/theodorebeaupre-prog/usher/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-8a8a8a)](LICENSE)
 [![made for](https://img.shields.io/badge/made_for-your_terminal-56b6c2)](#comment-ça-marche)
+[![buy me a coffee](https://img.shields.io/badge/☕_payez--moi_un_café-isonord-FFDD00)](https://buymeacoffee.com/isonord)
 
 🇬🇧 [English version](README.md)
 
@@ -253,7 +254,7 @@ $ usher
 [MIT](LICENSE) © 2026 ISO NORD CA
 
 <div align="center">
-<sub>Si usher vous a épargné un retapage aujourd'hui, une ⭐ aide la prochaine personne à trouver la porte.</sub>
+<sub>Si usher vous a épargné un retapage aujourd'hui, une ⭐ aide la prochaine personne à trouver la porte — et <a href="https://buymeacoffee.com/isonord">un ☕</a> lui paie ses nœuds papillon.</sub>
 <br><br>
 <sub>usher — <em>right this way.</em></sub>
 </div>
