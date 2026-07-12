@@ -55,6 +55,39 @@ review = "codex"
 	}
 }
 
+func TestContinuationGuardEnabledDefault(t *testing.T) {
+	var c Config
+	if !c.ContinuationGuardEnabled() {
+		t.Error("absent continuation_guard must default to enabled")
+	}
+}
+
+func TestContinuationGuardExplicit(t *testing.T) {
+	off, on := false, true
+	c := Config{ContinuationGuard: &off}
+	if c.ContinuationGuardEnabled() {
+		t.Error("continuation_guard = false must disable")
+	}
+	c.ContinuationGuard = &on
+	if !c.ContinuationGuardEnabled() {
+		t.Error("continuation_guard = true must enable")
+	}
+}
+
+func TestLoadContinuationGuardFalse(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(p, []byte("continuation_guard = false\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.ContinuationGuardEnabled() {
+		t.Error("loaded continuation_guard = false must disable")
+	}
+}
+
 func TestLoadBadTOMLErrors(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.toml")
 	os.WriteFile(path, []byte("this is = not [ toml"), 0o644)
