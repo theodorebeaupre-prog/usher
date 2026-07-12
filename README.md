@@ -98,7 +98,7 @@ $ usher -p "fix the crash"
 Patched the nil-check in auth.go; tests pass.
 ```
 
-One caveat for piped stdin: the first agent consumes it — a failover agent starts with an empty stdin.
+Piped stdin is buffered and replayed to every attempt, so a failover agent sees the same input the first one did.
 
 ## Supported agents
 

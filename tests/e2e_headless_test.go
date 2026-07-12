@@ -10,6 +10,30 @@ import (
 	"testing"
 )
 
+// TestHeadlessStdinReplayedToFailoverAgent verifies piped stdin is buffered
+// once and replayed to each attempt: claude drains stdin then quota-fails,
+// and codex — the failover — must still see the original piped content.
+func TestHeadlessStdinReplayedToFailoverAgent(t *testing.T) {
+	bin := buildUsher(t)
+	fakeDir, cfgHome := t.TempDir(), t.TempDir()
+	fakeAgent(t, fakeDir, "claude", `
+if [ "$1" = "--version" ]; then echo "1.0.0 (fake)"; exit 0; fi
+/bin/cat >/dev/null; echo "usage limit reached" >&2; exit 1`)
+	fakeAgent(t, fakeDir, "codex", `
+if [ "$1" = "--version" ]; then echo "1.0.0 (fake)"; exit 0; fi
+if [ "$1" = "exec" ]; then echo "GOT_STDIN: $(/bin/cat)"; exit 0; fi`)
+
+	cmd := exec.Command(bin, "-p", "fix the crash")
+	cmd.Env = []string{"PATH=" + fakeDir, "HOME=" + cfgHome, "XDG_CONFIG_HOME=" + cfgHome}
+	cmd.Stdin = strings.NewReader("context-from-pipe")
+	var out, errb strings.Builder
+	cmd.Stdout, cmd.Stderr = &out, &errb
+	_ = cmd.Run()
+	if !strings.Contains(out.String(), "GOT_STDIN: context-from-pipe") {
+		t.Errorf("failover agent did not receive replayed stdin:\nstdout: %s\nstderr: %s", out.String(), errb.String())
+	}
+}
+
 // runSplit is like run but keeps stdout and stderr separate — headless
 // stdout purity is part of the contract.
 func runSplit(t *testing.T, bin, fakeDir, cfgHome string, args ...string) (stdout, stderr string, exit int) {
@@ -72,6 +96,9 @@ echo "unexpected: $@" >&2; exit 9`)
 	if err != nil {
 		t.Fatalf("ledger not written: %v", err)
 	}
+	// Launch events are recorded once a run starts (regardless of outcome),
+	// not just on success — both claude and codex started here, so two
+	// "launch" events are expected even though claude's attempt quota-failed.
 	s := string(data)
 	if !strings.Contains(s, `"quota"`) || strings.Count(s, `"launch"`) < 2 {
 		t.Errorf("ledger missing quota + two launch events: %s", s)

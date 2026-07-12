@@ -2,9 +2,11 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -221,6 +223,11 @@ func cmdHeadless(task, forced string, why bool, timeout time.Duration) error {
 		printWhy(ranked, ranked[0].Name)
 	}
 
+	var stdinBuf []byte
+	if fi, ferr := os.Stdin.Stat(); ferr == nil && fi.Mode()&os.ModeCharDevice == 0 {
+		stdinBuf, _ = io.ReadAll(os.Stdin)
+	}
+
 	color := useColor()
 	exit := 0
 	for i, choice := range ranked {
@@ -229,14 +236,18 @@ func cmdHeadless(task, forced string, why bool, timeout time.Duration) error {
 			sgr(color, 96, "→ "+choice.Name),
 			sgr(color, 90, fmt.Sprintf("(%s task · headless)", choice.TaskType)))
 
-		led.RecordLaunch(choice.Name, time.Now())
-		if err := led.Save(); err != nil {
-			fmt.Fprintln(os.Stderr, "usher: could not save ledger:", err)
+		opts := launch.Opts{Timeout: timeout}
+		if stdinBuf != nil {
+			opts.Stdin = bytes.NewReader(stdinBuf)
 		}
 
 		var tail string
-		exit, _, tail, err = launch.Run(a.Bin(), a.HeadlessArgs(task), dir, launch.Opts{Timeout: timeout})
+		exit, _, tail, err = launch.Run(a.Bin(), a.HeadlessArgs(task), dir, opts)
 		if errors.Is(err, launch.ErrTimeout) {
+			led.RecordLaunch(choice.Name, time.Now())
+			if err := led.Save(); err != nil {
+				fmt.Fprintln(os.Stderr, "usher: could not save ledger:", err)
+			}
 			fmt.Fprintf(os.Stderr, "usher: %s timed out after %s\n", choice.Name, timeout)
 			os.Exit(124)
 		}
@@ -244,6 +255,10 @@ func cmdHeadless(task, forced string, why bool, timeout time.Duration) error {
 			fmt.Fprintf(os.Stderr, "usher: %s failed to start: %v\n", choice.Name, err)
 			exit = 1
 			continue
+		}
+		led.RecordLaunch(choice.Name, time.Now())
+		if err := led.Save(); err != nil {
+			fmt.Fprintln(os.Stderr, "usher: could not save ledger:", err)
 		}
 		if exit == 0 || !a.QuotaError(exit, tail) {
 			os.Exit(exit)
@@ -274,14 +289,12 @@ func noHeadlessAgentsError() error {
 }
 
 // launchWithFallback runs the chosen agent; on a quota error it records the
-// event and offers the runner-up. Every attempt — including recursive
-// relaunches down the quota Y/n path and the start-failure path — records
-// its own launch event first.
+// event and offers the runner-up. Every attempt that actually starts —
+// including recursive relaunches down the quota Y/n path — records its own
+// launch event once launch.Run returns. The start-failure path (the CLI
+// vanished between detect and exec) records nothing, since the process
+// never ran.
 func launchWithFallback(choice router.Scored, ranked []router.Scored, task, dir string, led *ledger.Ledger) error {
-	led.RecordLaunch(choice.Name, time.Now())
-	if err := led.Save(); err != nil {
-		fmt.Fprintln(os.Stderr, "usher: could not save ledger:", err)
-	}
 	a, _ := adapters.Get(choice.Name)
 	exit, _, tail, err := launch.Run(a.Bin(), a.LaunchArgs(task), dir, launch.Opts{})
 	if err != nil {
@@ -292,6 +305,10 @@ func launchWithFallback(choice router.Scored, ranked []router.Scored, task, dir 
 			return launchWithFallback(next, remove(ranked, choice.Name), task, dir, led)
 		}
 		return err
+	}
+	led.RecordLaunch(choice.Name, time.Now())
+	if err := led.Save(); err != nil {
+		fmt.Fprintln(os.Stderr, "usher: could not save ledger:", err)
 	}
 	if a.QuotaError(exit, tail) {
 		led.RecordQuota(choice.Name, time.Now())
