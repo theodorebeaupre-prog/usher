@@ -11,6 +11,8 @@ You already pay for Claude Code, Codex, Gemini CLI, Copilot… **usher decides w
 [![license](https://img.shields.io/badge/license-MIT-8a8a8a)](LICENSE)
 [![made for](https://img.shields.io/badge/made_for-your_terminal-56b6c2)](#how-it-works)
 
+🇫🇷 [Version française](README.fr.md)
+
 </div>
 
 > **v0.3 — feature-complete for the 1.0 freeze.** Every terminal example below is live behavior, not aspiration. Found a rough edge? [Issues welcome](https://github.com/theodorebeaupre-prog/usher/issues).
@@ -73,7 +75,28 @@ task type: review
 
 (That `0.71` is claude cooling down from a recent cap — strongest reviewer after codex, but usher routes around the wall instead of into it.)
 
-And when you disagree, you win: `usher --agent claude "…"` skips the scoring entirely, and a [config file](#configuration) lets you re-weight anything or pin patterns for good.
+### Where the scores come from
+
+usher doesn't *know* which agent is best — it has **written-down opinions, multiplied by what it has observed.** Three ingredients:
+
+1. **Task type** — plain keyword matching sorts your sentence into a bucket, checked in priority order: *fix/crash/flaky* → `debug` before *test* → `test`, which is why "fix the flaky test" counts as debugging, not testing. No match → `other`.
+2. **Strength priors** — every adapter ships a hand-written table. An excerpt of the actual defaults:
+
+   | | debug | feature | refactor | review | docs | test |
+   |---|---|---|---|---|---|---|
+   | claude | **.90** | **.90** | **.95** | .85 | .85 | .85 |
+   | codex | .85 | .80 | .80 | **.95** | .70 | **.90** |
+   | gemini | .70 | .75 | .70 | .70 | **.90** | .70 |
+   | cursor | .80 | .85 | .85 | .75 | .70 | .80 |
+
+   Full honesty: these are **editorial judgments of each tool's reputation, not benchmarks** — Claude Code's multi-file refactoring earns its `.95` the same way Codex's review mode earns its own. They're priors: deliberately visible, deliberately yours to override.
+3. **Quota confidence** — each strength is multiplied by what the [ledger](#routing-around-rate-limits) has witnessed. A cap observed 40 minutes ago scales that agent down until its window recovers: best *available* beats best *on paper*.
+
+Pins outrank scores, `--agent` outranks everything, and `--why` shows the whole calculation. usher can be wrong — it can never be mysterious.
+
+Why no LLM in the loop? Routing would then cost latency, network, and quota — *spending quota to decide how to spend quota* — and you couldn't predict or override it. The default stays boring on purpose; the long-term plan is that **you teach it**: every routing decision you disagree with is a weight to nudge in your config, and the 1.0 pass tunes the shipped defaults from real-world use.
+
+And when you disagree in the moment, you win: `usher --agent claude "…"` skips the scoring entirely, and the [config file](#configuration) makes your opinion permanent.
 
 ## Routing around rate limits
 
