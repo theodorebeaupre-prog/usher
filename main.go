@@ -179,11 +179,12 @@ func cmdLaunch(task, forced string, why bool) error {
 
 // jsonAttempt records one launch attempt for the --json envelope.
 type jsonAttempt struct {
-	Agent      string `json:"agent"`
-	ExitCode   int    `json:"exit_code"`
-	QuotaError bool   `json:"quota_error"`
-	TimedOut   bool   `json:"timed_out"`
-	DurationMS int64  `json:"duration_ms"`
+	Agent             string `json:"agent"`
+	ExitCode          int    `json:"exit_code"`
+	QuotaError        bool   `json:"quota_error"`
+	TimedOut          bool   `json:"timed_out"`
+	DurationMS        int64  `json:"duration_ms"`
+	ContinuationGuard bool   `json:"continuation_guard,omitempty"`
 }
 
 // jsonEnvelope is the single JSON object --json prints to stdout in headless
@@ -287,8 +288,15 @@ func cmdHeadless(task, forced string, why bool, timeout time.Duration, asJSON bo
 	exit := 0
 	var attempts []jsonAttempt
 	var output string
+	var priorRan []string // agents that actually executed (real exit), in attempt order
 	for i, choice := range ranked {
 		a, _ := adapters.Get(choice.Name)
+		prompt := task
+		guarded := false
+		if len(priorRan) > 0 && cfg.ContinuationGuardEnabled() {
+			prompt = guardedPrompt(task, priorRan)
+			guarded = true
+		}
 		fmt.Fprintf(os.Stderr, "%s  %s\n",
 			sgr(color, 96, "→ "+choice.Name),
 			sgr(color, 90, fmt.Sprintf("(%s task · headless)", choice.TaskType)))
@@ -300,12 +308,12 @@ func cmdHeadless(task, forced string, why bool, timeout time.Duration, asJSON bo
 
 		var out, tail string
 		attemptStart := time.Now()
-		exit, out, tail, err = launch.Run(a.Bin(), a.HeadlessArgs(task), dir, opts)
+		exit, out, tail, err = launch.Run(a.Bin(), a.HeadlessArgs(prompt), dir, opts)
 		durMS := time.Since(attemptStart).Milliseconds()
 		output = out
 
 		if errors.Is(err, launch.ErrTimeout) {
-			attempts = append(attempts, jsonAttempt{Agent: choice.Name, ExitCode: 124, TimedOut: true, DurationMS: durMS})
+			attempts = append(attempts, jsonAttempt{Agent: choice.Name, ExitCode: 124, TimedOut: true, DurationMS: durMS, ContinuationGuard: guarded})
 			led.RecordLaunch(choice.Name, time.Now())
 			if err := led.Save(); err != nil {
 				fmt.Fprintln(os.Stderr, "usher: could not save ledger:", err)
@@ -320,13 +328,14 @@ func cmdHeadless(task, forced string, why bool, timeout time.Duration, asJSON bo
 			os.Exit(124)
 		}
 		if err != nil {
-			attempts = append(attempts, jsonAttempt{Agent: choice.Name, ExitCode: -1, DurationMS: durMS})
+			attempts = append(attempts, jsonAttempt{Agent: choice.Name, ExitCode: -1, DurationMS: durMS, ContinuationGuard: guarded})
 			fmt.Fprintf(os.Stderr, "usher: %s failed to start: %v\n", choice.Name, err)
 			exit = 1
 			continue
 		}
 		quotaErr := exit != 0 && a.QuotaError(exit, tail)
-		attempts = append(attempts, jsonAttempt{Agent: choice.Name, ExitCode: exit, QuotaError: quotaErr, DurationMS: durMS})
+		attempts = append(attempts, jsonAttempt{Agent: choice.Name, ExitCode: exit, QuotaError: quotaErr, DurationMS: durMS, ContinuationGuard: guarded})
+		priorRan = append(priorRan, choice.Name)
 		led.RecordLaunch(choice.Name, time.Now())
 		if err := led.Save(); err != nil {
 			fmt.Fprintln(os.Stderr, "usher: could not save ledger:", err)
@@ -345,8 +354,12 @@ func cmdHeadless(task, forced string, why bool, timeout time.Duration, asJSON bo
 			fmt.Fprintln(os.Stderr, "usher: could not save ledger:", err)
 		}
 		if i < len(ranked)-1 {
+			note := ""
+			if cfg.ContinuationGuardEnabled() {
+				note = " (with continuation notice)"
+			}
 			fmt.Fprintf(os.Stderr, "%s\n", sgr(color, 93,
-				fmt.Sprintf("→ %s hit its cap — failing over to %s", choice.Name, ranked[i+1].Name)))
+				fmt.Sprintf("→ %s hit its cap — failing over to %s%s", choice.Name, ranked[i+1].Name, note)))
 		}
 	}
 	fmt.Fprintln(os.Stderr, "usher: every available agent is capped or failed — exiting with the last agent's code")
