@@ -177,11 +177,6 @@ func cmdLaunch(task, forced string, why bool) error {
 	return launchWithFallback(choice, ranked, task, dir, led)
 }
 
-// cmdHeadless routes and runs the winner's print-and-exit mode. usher's own
-// lines go to stderr; stdout belongs entirely to the agent. On a quota error
-// it fails over to the next ranked agent automatically — each agent is
-// attempted at most once. A forced --agent skips ranking and failover
-// entirely.
 // jsonAttempt records one launch attempt for the --json envelope.
 type jsonAttempt struct {
 	Agent      string `json:"agent"`
@@ -220,6 +215,11 @@ func sumDurationsMS(attempts []jsonAttempt) int64 {
 	return total
 }
 
+// cmdHeadless routes and runs the winner's print-and-exit mode. usher's own
+// lines go to stderr; stdout belongs entirely to the agent. On a quota error
+// it fails over to the next ranked agent automatically — each agent is
+// attempted at most once. A forced --agent skips ranking and failover
+// entirely.
 func cmdHeadless(task, forced string, why bool, timeout time.Duration, asJSON bool) error {
 	now := time.Now()
 	cfg, err := config.Load(filepath.Join(config.Dir(), "config.toml"))

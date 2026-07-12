@@ -6,13 +6,13 @@
 
 You already pay for Claude Code, Codex, Gemini CLI… **usher decides which one gets the job** — routing on task type, each agent's strengths, and who still has quota left. Built on the subscriptions you have. **No API keys.**
 
-[![status](https://img.shields.io/badge/status-v0.2-4c1)](#roadmap)
+[![status](https://img.shields.io/badge/status-v0.3-4c1)](#roadmap)
 [![license](https://img.shields.io/badge/license-MIT-8a8a8a)](LICENSE)
 [![made for](https://img.shields.io/badge/made_for-your_terminal-56b6c2)](#how-it-works)
 
 </div>
 
-> **v0.2.** Early but real — the examples below are live behavior. Found a rough edge? Issues welcome.
+> **v0.3.** Early but real — the examples below are live behavior. Found a rough edge? Issues welcome.
 
 ---
 
@@ -42,7 +42,7 @@ $ go install github.com/theodorebeaupre-prog/usher@latest   # anywhere with Go
 
 Three things happen in the milliseconds before handoff — all local, no network call, works offline:
 
-1. **Detect** — finds which agent CLIs are installed (Claude Code, Codex, Gemini CLI, opencode, GitHub Copilot CLI, Cursor).
+1. **Detect** — finds which agent CLIs are installed (Claude Code, Codex, Gemini CLI, opencode, Amp, GitHub Copilot CLI, Cursor, Qwen Code).
 2. **Rank** — a transparent heuristic scores each agent: task-type classification (debug / feature / refactor / review / docs / test) × per-agent strength weights × a quota-confidence penalty × your pinned rules.
 3. **Exec** — replaces itself with the winner's interactive session. Full TTY, native experience, zero latency added where it counts.
 
@@ -100,6 +100,15 @@ Patched the nil-check in auth.go; tests pass.
 
 Piped stdin is buffered and replayed to every attempt, so a failover agent sees the same input the first one did.
 
+For tooling, `--json` wraps the run in one machine-readable object (the only
+thing printed to stdout), and `--timeout` keeps a hung agent from stalling
+your pipeline (exit 124, GNU convention):
+
+```console
+$ usher -p --json --timeout 5m "fix the crash" | jq .agent
+"codex"
+```
+
 ## Supported agents
 
 | Agent | Subscription it uses | Adapter |
@@ -108,8 +117,10 @@ Piped stdin is buffered and replayed to every attempt, so a failover agent sees 
 | **Codex** | ChatGPT Plus / Pro | ✅ v0.1 |
 | **Gemini CLI** | Google AI Pro / free tier | ✅ v0.1 |
 | **opencode** | bring-your-own (incl. subscriptions) | ✅ v0.1 |
+| **Amp** | Amp free / Pro | ✅ v0.3 |
 | **GitHub Copilot CLI** | Copilot Free / Pro / Pro+ | ✅ v0.2 |
 | **Cursor CLI** | Cursor Hobby / Pro | ✅ v0.2 |
+| **Qwen Code** | Qwen free tier / ModelScope | ✅ v0.3 |
 | *yours?* | | [an adapter is one file](#contributing) |
 
 ## Design principles
@@ -125,7 +136,8 @@ Piped stdin is buffered and replayed to every attempt, so a failover agent sees 
 - [x] Identity: wordmark + [animated terminal banner](assets/banner/) (engineering inspired by [GitHub Copilot CLI's banner](https://github.blog/engineering/from-pixels-to-characters-the-engineering-behind-github-copilot-clis-animated-ascii-banner/))
 - [x] v0.1 — adapters ×4, heuristic router, quota ledger, `doctor`, `--why`, Homebrew tap
 - [x] v0.2 — headless mode (-p) with auto-failover, Copilot + Cursor adapters
-- [ ] v0.3 — --json envelope, --timeout guard, more adapters
+- [x] v0.3 — --json envelope, --timeout guard, stdin replay, Qwen + Amp adapters
+- [ ] v1.0 — interface freeze, shell completions, man page, verified adapters
 - [ ] Later — optional LLM-assisted routing, multi-account support
 
 ## Contributing
