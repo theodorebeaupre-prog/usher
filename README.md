@@ -18,6 +18,8 @@ You already pay for Claude Code, Codex, Gemini CLI, Copilot… **usher decides w
 
 > **v0.3 — feature-complete for the 1.0 freeze.** Every terminal example below is live behavior, not aspiration. Found a rough edge? [Issues welcome](https://github.com/theodorebeaupre-prog/usher/issues).
 
+> 🛠️ Shipping solo with AI? The **Ship Kit** packs 3 premium Claude Code skills, proven config templates, and a zero-budget launch playbook → https://isonord.gumroad.com/l/qblnuh
+
 ---
 
 ## Why
